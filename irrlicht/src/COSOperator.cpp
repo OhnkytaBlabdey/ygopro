@@ -52,7 +52,7 @@ const core::stringc& COSOperator::getOperatingSystemVersion() const
 
 
 //! copies text to the clipboard
-void COSOperator::copyToClipboard(const c8* text) const
+void COSOperator::copyToClipboard(const c16* text) const
 {
 // Windows version
 #if defined(_IRR_XBOX_PLATFORM_)
@@ -105,7 +105,7 @@ void COSOperator::copyToClipboard(const c8* text) const
 
 //! gets text from the clipboard
 //! \return Returns 0 if no string is in there.
-const c8* COSOperator::getTextFromClipboard() const
+const c16* COSOperator::getTextFromClipboard() const
 {
 #if defined(_IRR_XBOX_PLATFORM_)
 		return 0;
@@ -113,14 +113,14 @@ const c8* COSOperator::getTextFromClipboard() const
 	if (!OpenClipboard(NULL))
 		return 0;
 
-	char * buffer = 0;
+	wchar_t * buffer = 0;
 
 #ifdef _UNICODE
 	HANDLE hData = GetClipboardData( CF_UNICODETEXT );
 #else
 	HANDLE hData = GetClipboardData( CF_TEXT );
 #endif
-	buffer = (char*)GlobalLock( hData );
+	buffer = (wchar_t*)GlobalLock( hData );
 	GlobalUnlock( hData );
 	CloseClipboard();
 	return buffer;
