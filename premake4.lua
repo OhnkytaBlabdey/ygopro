@@ -6,7 +6,7 @@ solution "ygo"
     configurations { "Debug", "Release" }
 
     configuration "windows"
-        defines { "WIN32", "_WIN32" }
+        defines { "WIN32", "_WIN32", "WINVER=0x0501" }
 
     configuration "bsd"
         defines { "LUA_USE_POSIX" }
