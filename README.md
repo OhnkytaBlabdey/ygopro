@@ -2,22 +2,20 @@ forked from https://github.com/soarqin/ygopro
 
 only tested for vs, probably has mistake on other platforms
 
-HOW TO BUILD
-============
+###HOW TO BUILD
 
 Get/Build premake5 from:
   http://premake.github.io/
 
 Compiling on visual studio:
-  Type 'premake5 vs2010'(or other versions of visual studio) in command line
+  Type 'premake5 vs2015'(or other versions of visual studio) in command line
 to generate project files under folder 'build'.
 
 Compiling on msys/mingw or POSIX systems:
   Type 'premake4 gmake' in terminal to generate makefiles under folder 'build'
 and then type 'make -Cbuild' to bring it on.
 
-CREDITS
-=======
+###CREDITS
     freetype: http://www.freetype.org
     irrlicht: http://irrlicht.sourceforge.net
     libevent: http://www.libevent.org
