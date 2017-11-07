@@ -4,7 +4,7 @@
 #pragma once
 
 #define _IRR_STATIC_LIB_
-#define _IRR_COMPILE_WITH_DX9_DEV_PACK
+#define IRR_COMPILE_WITH_DX9_DEV_PACK
 #ifdef _WIN32
 
 #include <WinSock2.h>
@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <locale.h>
 
 #define SD_BOTH 2
 #define SOCKET int
@@ -47,6 +48,7 @@ inline int _wtoi(const wchar_t * s) {
 #endif
 
 #include <irrlicht.h>
+#include <irrKlang.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "CGUITTFont.h"
@@ -70,8 +72,10 @@ using namespace video;
 using namespace io;
 using namespace gui;
 
-extern const unsigned short PRO_VERSION;
+extern unsigned short PRO_VERSION;
 extern int enable_log;
 extern bool exit_on_return;
+extern bool open_file;
+extern wchar_t open_file_name[256];
 
 #endif
