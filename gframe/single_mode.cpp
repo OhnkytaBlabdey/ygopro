@@ -51,7 +51,6 @@ int SingleMode::SinglePlayThread(void* param) {
 	set_player_info(pduel, 1, 8000, 5, 1);
 	mainGame->dInfo.lp[0] = 8000;
 	mainGame->dInfo.lp[1] = 8000;
-	mainGame->dInfo.startlp = 8000;
 	myswprintf(mainGame->dInfo.strLP[0], L"%d", mainGame->dInfo.lp[0]);
 	myswprintf(mainGame->dInfo.strLP[1], L"%d", mainGame->dInfo.lp[1]);
 	BufferIO::CopyWStr(mainGame->ebNickName->getText(), mainGame->dInfo.hostname, 20);
@@ -82,6 +81,7 @@ int SingleMode::SinglePlayThread(void* param) {
 	mainGame->dField.Clear();
 	mainGame->dInfo.isFirst = true;
 	mainGame->dInfo.isStarted = true;
+	mainGame->dInfo.isFinished = false;
 	mainGame->dInfo.isSingleMode = true;
 	mainGame->device->setEventReceiver(&mainGame->dField);
 	mainGame->gMutex.Unlock();
@@ -103,6 +103,7 @@ int SingleMode::SinglePlayThread(void* param) {
 	if(!is_closing) {
 		mainGame->gMutex.Lock();
 		mainGame->dInfo.isStarted = false;
+		mainGame->dInfo.isFinished = true;
 		mainGame->dInfo.isSingleMode = false;
 		mainGame->gMutex.Unlock();
 		mainGame->closeDoneSignal.Reset();
@@ -131,6 +132,7 @@ bool SingleMode::SinglePlayAnalyze(char* msg, unsigned int len) {
 			mainGame->gMutex.Lock();
 			mainGame->stMessage->setText(L"Error occurs.");
 			mainGame->PopupElement(mainGame->wMessage);
+			mainGame->PlaySoundEffect(SOUND_INFO);
 			mainGame->gMutex.Unlock();
 			mainGame->actionSignal.Reset();
 			mainGame->actionSignal.Wait();
@@ -216,19 +218,6 @@ bool SingleMode::SinglePlayAnalyze(char* msg, unsigned int len) {
 		case MSG_SELECT_TRIBUTE: {
 			player = BufferIO::ReadInt8(pbuf);
 			pbuf += 3;
-			count = BufferIO::ReadInt8(pbuf);
-			pbuf += count * 8;
-			if(!DuelClient::ClientAnalyze(offset, pbuf - offset)) {
-				mainGame->singleSignal.Reset();
-				mainGame->singleSignal.Wait();
-			}
-			break;
-		}
-		case MSG_SELECT_UNSELECT_CARD: {
-			player = BufferIO::ReadInt8(pbuf);
-			pbuf += 4;
-			count = BufferIO::ReadInt8(pbuf);
-			pbuf += count * 8;
 			count = BufferIO::ReadInt8(pbuf);
 			pbuf += count * 8;
 			if(!DuelClient::ClientAnalyze(offset, pbuf - offset)) {
@@ -662,46 +651,7 @@ bool SingleMode::SinglePlayAnalyze(char* msg, unsigned int len) {
 		case MSG_RELOAD_FIELD: {
 			mainGame->gMutex.Lock();
 			mainGame->dField.Clear();
-			int rule = BufferIO::ReadInt8(pbuf);
-			mainGame->dInfo.duel_rule = rule & 0xf;
-			mainGame->dInfo.speed = (rule >> 4) ? 1 : 0;
-			// reset master rule 4 phase button position
-			mainGame->wPhase->setRelativePosition(mainGame->Resize(480, 310, 855, 330));
-			if(mainGame->dInfo.speed) {
-				if(mainGame->dInfo.duel_rule >= 4) {
-					mainGame->wPhase->setRelativePosition(mainGame->Resize(480, 290, 855, 350));
-					mainGame->btnShuffle->setRelativePosition(mainGame->Resize(0, 40, 50, 60));
-					mainGame->btnDP->setRelativePosition(mainGame->Resize(0, 40, 50, 60));
-					mainGame->btnSP->setRelativePosition(mainGame->Resize(0, 40, 50, 60));
-					mainGame->btnM1->setRelativePosition(mainGame->Resize(160, 20, 210, 40));
-					mainGame->btnBP->setRelativePosition(mainGame->Resize(160, 20, 210, 40));
-					mainGame->btnM2->setRelativePosition(mainGame->Resize(160, 20, 210, 40));
-					mainGame->btnEP->setRelativePosition(mainGame->Resize(310, 0, 360, 20));
-				} else {
-					mainGame->btnShuffle->setRelativePosition(mainGame->Resize(65, 0, 115, 20));
-					mainGame->btnDP->setRelativePosition(mainGame->Resize(65, 0, 115, 20));
-					mainGame->btnSP->setRelativePosition(mainGame->Resize(65, 0, 115, 20));
-					mainGame->btnM1->setRelativePosition(mainGame->Resize(130, 0, 180, 20));
-					mainGame->btnBP->setRelativePosition(mainGame->Resize(195, 0, 245, 20));
-					mainGame->btnM2->setRelativePosition(mainGame->Resize(260, 0, 310, 20));
-					mainGame->btnEP->setRelativePosition(mainGame->Resize(260, 0, 310, 20));
-				}
-			} else {
-				mainGame->btnDP->setRelativePosition(mainGame->Resize(0, 0, 50, 20));
-				if(mainGame->dInfo.duel_rule >= 4) {
-					mainGame->btnSP->setRelativePosition(mainGame->Resize(0, 0, 50, 20));
-					mainGame->btnM1->setRelativePosition(mainGame->Resize(160, 0, 210, 20));
-					mainGame->btnBP->setRelativePosition(mainGame->Resize(160, 0, 210, 20));
-					mainGame->btnM2->setRelativePosition(mainGame->Resize(160, 0, 210, 20));
-				} else {
-					mainGame->btnSP->setRelativePosition(mainGame->Resize(65, 0, 115, 20));
-					mainGame->btnM1->setRelativePosition(mainGame->Resize(130, 0, 180, 20));
-					mainGame->btnBP->setRelativePosition(mainGame->Resize(195, 0, 245, 20));
-					mainGame->btnM2->setRelativePosition(mainGame->Resize(260, 0, 310, 20));
-				}
-				mainGame->btnEP->setRelativePosition(mainGame->Resize(320, 0, 370, 20));
-				mainGame->btnShuffle->setRelativePosition(mainGame->Resize(0, 0, 50, 20));
-			}
+			mainGame->dInfo.duel_rule = BufferIO::ReadInt8(pbuf);
 			int val = 0;
 			for(int p = 0; p < 2; ++p) {
 				mainGame->dInfo.lp[p] = BufferIO::ReadInt32(pbuf);
@@ -789,6 +739,7 @@ bool SingleMode::SinglePlayAnalyze(char* msg, unsigned int len) {
 			mainGame->gMutex.Lock();
 			mainGame->SetStaticText(mainGame->stMessage, 310, mainGame->textFont, msg);
 			mainGame->PopupElement(mainGame->wMessage);
+			mainGame->PlaySoundEffect(SOUND_INFO);
 			mainGame->gMutex.Unlock();
 			mainGame->actionSignal.Reset();
 			mainGame->actionSignal.Wait();
