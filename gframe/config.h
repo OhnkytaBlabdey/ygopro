@@ -4,7 +4,7 @@
 #pragma once
 
 #define _IRR_STATIC_LIB_
-#define _IRR_COMPILE_WITH_DX9_DEV_PACK
+#define IRR_COMPILE_WITH_DX9_DEV_PACK
 #ifdef _WIN32
 
 #include <WinSock2.h>
@@ -28,6 +28,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <locale.h>
 
 #define SD_BOTH 2
 #define SOCKET int
@@ -73,5 +74,8 @@ using namespace gui;
 extern const unsigned short PRO_VERSION;
 extern int enable_log;
 extern bool exit_on_return;
+extern bool open_file;
+extern wchar_t open_file_name[256];
+extern bool bot_mode;
 
 #endif

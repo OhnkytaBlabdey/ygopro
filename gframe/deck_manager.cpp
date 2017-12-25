@@ -1,5 +1,6 @@
 #include "deck_manager.h"
 #include "data_manager.h"
+#include "network.h"
 #include "game.h"
 #include <algorithm>
 
@@ -13,12 +14,7 @@ void DeckManager::LoadLFList() {
 	char linebuf[256];
 	wchar_t strBuffer[256];
 	if(fp) {
-		fseek(fp, 0, SEEK_END);
-		int fsize = ftell(fp);
-		fseek(fp, 0, SEEK_SET);
-		fgets(linebuf, 256, fp);
-		while(ftell(fp) < fsize) {
-			fgets(linebuf, 256, fp);
+		while(fgets(linebuf, 256, fp)) {
 			if(linebuf[0] == '#')
 				continue;
 			int p = 0, sa = 0, code, count;
@@ -66,7 +62,7 @@ wchar_t* DeckManager::GetLFListName(int lfhash) {
 	}
 	return (wchar_t*)dataManager.unknown_string;
 }
-int DeckManager::CheckLFList(Deck& deck, int lfhash, bool allow_ocg, bool allow_tcg) {
+int DeckManager::CheckDeck(Deck& deck, int lfhash, bool allow_ocg, bool allow_tcg) {
 	std::unordered_map<int, int> ccount;
 	std::unordered_map<int, int>* list = 0;
 	for(size_t i = 0; i < _lfList.size(); ++i) {
@@ -78,70 +74,93 @@ int DeckManager::CheckLFList(Deck& deck, int lfhash, bool allow_ocg, bool allow_
 	if(!list)
 		return 0;
 	int dc = 0;
-	if(deck.main.size() < 40 || deck.main.size() > 60 || deck.extra.size() > 15 || deck.side.size() > 15)
-		return 1;
+	if(deck.main.size() < 40 || deck.main.size() > 60)
+		return (DECKERROR_MAINCOUNT << 28) + deck.main.size();
+	if(deck.extra.size() > 15)
+		return (DECKERROR_EXTRACOUNT << 28) + deck.extra.size();
+	if(deck.side.size() > 15)
+		return (DECKERROR_SIDECOUNT << 28) + deck.side.size();
+
 	for(size_t i = 0; i < deck.main.size(); ++i) {
 		code_pointer cit = deck.main[i];
-		if((!allow_ocg && (cit->second.ot == 0x1)) || (!allow_tcg && (cit->second.ot == 0x2)))
-			return cit->first;
-		if(cit->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_TOKEN))
-			return 1;
+		if(!allow_ocg && (cit->second.ot == 0x1))
+			return (DECKERROR_OCGONLY << 28) + cit->first;
+		if(!allow_tcg && (cit->second.ot == 0x2))
+			return (DECKERROR_TCGONLY << 28) + cit->first;
+		if(cit->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_TOKEN | TYPE_LINK))
+			return (DECKERROR_EXTRACOUNT << 28);
 		int code = cit->second.alias ? cit->second.alias : cit->first;
 		ccount[code]++;
 		dc = ccount[code];
+		if(dc > 3)
+			return (DECKERROR_CARDCOUNT << 28) + cit->first;
 		auto it = list->find(code);
-		if(dc > 3 || (it != list->end() && dc > it->second))
-			return cit->first;
+		if(it != list->end() && dc > it->second)
+			return (DECKERROR_LFLIST << 28) + cit->first;
 	}
 	for(size_t i = 0; i < deck.extra.size(); ++i) {
 		code_pointer cit = deck.extra[i];
-		if((!allow_ocg && (cit->second.ot == 0x1)) || (!allow_tcg && (cit->second.ot == 0x2)))
-			return cit->first;
+		if(!allow_ocg && (cit->second.ot == 0x1))
+			return (DECKERROR_OCGONLY << 28) + cit->first;
+		if(!allow_tcg && (cit->second.ot == 0x2))
+			return (DECKERROR_TCGONLY << 28) + cit->first;
 		int code = cit->second.alias ? cit->second.alias : cit->first;
 		ccount[code]++;
 		dc = ccount[code];
+		if(dc > 3)
+			return (DECKERROR_CARDCOUNT << 28) + cit->first;
 		auto it = list->find(code);
-		if(dc > 3 || (it != list->end() && dc > it->second))
-			return cit->first;
+		if(it != list->end() && dc > it->second)
+			return (DECKERROR_LFLIST << 28) + cit->first;
 	}
 	for(size_t i = 0; i < deck.side.size(); ++i) {
 		code_pointer cit = deck.side[i];
-		if((!allow_ocg && (cit->second.ot == 0x1)) || (!allow_tcg && (cit->second.ot == 0x2)))
-			return cit->first;
+		if(!allow_ocg && (cit->second.ot == 0x1))
+			return (DECKERROR_OCGONLY << 28) + cit->first;
+		if(!allow_tcg && (cit->second.ot == 0x2))
+			return (DECKERROR_TCGONLY << 28) + cit->first;
 		int code = cit->second.alias ? cit->second.alias : cit->first;
 		ccount[code]++;
 		dc = ccount[code];
+		if(dc > 3)
+			return (DECKERROR_CARDCOUNT << 28) + cit->first;
 		auto it = list->find(code);
-		if(dc > 3 || (it != list->end() && dc > it->second))
-			return cit->first;
+		if(it != list->end() && dc > it->second)
+			return (DECKERROR_LFLIST << 28) + cit->first;
 	}
 	return 0;
 }
-void DeckManager::LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec) {
+int DeckManager::LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec) {
 	deck.clear();
 	int code;
+	int errorcode = 0;
 	CardData cd;
 	for(int i = 0; i < mainc; ++i) {
 		code = dbuf[i];
-		if(!dataManager.GetData(code, &cd))
+		if(!dataManager.GetData(code, &cd)) {
+			errorcode = code;
 			continue;
+		}
 		if(cd.type & TYPE_TOKEN)
 			continue;
-		else if(cd.type & 0x802040 && deck.extra.size() < 15) {
-			deck.extra.push_back(dataManager.GetCodePointer(code));
+		else if(cd.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK) && deck.extra.size() < 15) {
+			deck.extra.push_back(dataManager.GetCodePointer(code));	//verified by GetData()
 		} else if(deck.main.size() < 60) {
 			deck.main.push_back(dataManager.GetCodePointer(code));
 		}
 	}
 	for(int i = 0; i < sidec; ++i) {
 		code = dbuf[mainc + i];
-		if(!dataManager.GetData(code, &cd))
+		if(!dataManager.GetData(code, &cd)) {
+			errorcode = code;
 			continue;
+		}
 		if(cd.type & TYPE_TOKEN)
 			continue;
 		if(deck.side.size() < 15)
-			deck.side.push_back(dataManager.GetCodePointer(code));
+			deck.side.push_back(dataManager.GetCodePointer(code));	//verified by GetData()
 	}
+	return errorcode;
 }
 bool DeckManager::LoadSide(Deck& deck, int* dbuf, int mainc, int sidec) {
 	std::unordered_map<int, int> pcount;
@@ -168,28 +187,30 @@ bool DeckManager::LoadSide(Deck& deck, int* dbuf, int mainc, int sidec) {
 	deck = ndeck;
 	return true;
 }
+FILE* DeckManager::OpenDeckFile(const wchar_t* file, const char* mode) {
+#ifdef WIN32
+	FILE* fp = _wfopen(file, (wchar_t*)mode);
+#else
+	char file2[256];
+	BufferIO::EncodeUTF8(file, file2);
+	FILE* fp = fopen(file2, mode);
+#endif
+	return fp;
+}
 bool DeckManager::LoadDeck(const wchar_t* file) {
 	int sp = 0, ct = 0, mainc = 0, sidec = 0, code;
-	wchar_t deck[64];
-	myswprintf(deck, L"./deck/%ls.ydk", file);
-	int cardlist[128];
-	bool is_side = false;
-#ifdef WIN32
-	FILE* fp = _wfopen(deck, L"r");
-#else
-	char deckfn[256];
-	BufferIO::EncodeUTF8(deck, deckfn);
-	FILE* fp = fopen(deckfn, "r");
-#endif
+	wchar_t localfile[64];
+	myswprintf(localfile, L"./deck/%ls.ydk", file);
+	FILE* fp = OpenDeckFile(localfile, "r");
+	if(!fp) {
+		fp = OpenDeckFile(file, "r");
+	}
 	if(!fp)
 		return false;
+	int cardlist[128];
+	bool is_side = false;
 	char linebuf[256];
-	fseek(fp, 0, SEEK_END);
-	int fsize = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	fgets(linebuf, 256, fp);
-	while(ftell(fp) < fsize && ct < 128) {
-		fgets(linebuf, 256, fp);
+	while(fgets(linebuf, 256, fp) && ct < 128) {
 		if(linebuf[0] == '!') {
 			is_side = true;
 			continue;
@@ -211,13 +232,7 @@ bool DeckManager::LoadDeck(const wchar_t* file) {
 bool DeckManager::SaveDeck(Deck& deck, const wchar_t* name) {
 	wchar_t file[64];
 	myswprintf(file, L"./deck/%ls.ydk", name);
-#ifdef WIN32
-	FILE* fp = _wfopen(file, L"w");
-#else
-	char filefn[256];
-	BufferIO::EncodeUTF8(file, filefn);
-	FILE* fp = fopen(filefn, "w");
-#endif
+	FILE* fp = OpenDeckFile(file, "w");
 	if(!fp)
 		return false;
 	fprintf(fp, "#created by ...\n#main\n");
@@ -231,5 +246,18 @@ bool DeckManager::SaveDeck(Deck& deck, const wchar_t* name) {
 		fprintf(fp, "%d\n", deck.side[i]->first);
 	fclose(fp);
 	return true;
+}
+bool DeckManager::DeleteDeck(Deck& deck, const wchar_t* name) {
+	wchar_t file[64];
+	myswprintf(file, L"./deck/%ls.ydk", name);
+#ifdef WIN32
+	BOOL result = DeleteFileW(file);
+	return !!result;
+#else
+	char filefn[256];
+	BufferIO::EncodeUTF8(file, filefn);
+	int result = unlink(filefn);
+	return result == 0;
+#endif
 }
 }

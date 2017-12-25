@@ -37,11 +37,13 @@ public:
 
 	void LoadLFList();
 	wchar_t* GetLFListName(int lfhash);
-	int CheckLFList(Deck& deck, int lfhash, bool allow_ocg, bool allow_tcg);
-	void LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec);
+	int CheckDeck(Deck& deck, int lfhash, bool allow_ocg, bool allow_tcg);
+	int LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec);
 	bool LoadSide(Deck& deck, int* dbuf, int mainc, int sidec);
+	FILE* OpenDeckFile(const wchar_t * file, const char * mode);
 	bool LoadDeck(const wchar_t* file);
 	bool SaveDeck(Deck& deck, const wchar_t* name);
+	bool DeleteDeck(Deck& deck, const wchar_t* name);
 };
 
 extern DeckManager deckManager;

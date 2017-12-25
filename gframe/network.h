@@ -15,7 +15,7 @@ struct HostInfo {
 	unsigned int lflist;
 	unsigned char rule;
 	unsigned char mode;
-	bool enable_priority;
+	unsigned char duel_rule;
 	bool no_check_deck;
 	bool no_shuffle_deck;
 	unsigned int start_lp;
@@ -206,6 +206,15 @@ public:
 #define ERRMSG_DECKERROR	0x2
 #define ERRMSG_SIDEERROR	0x3
 #define ERRMSG_VERERROR		0x4
+
+#define DECKERROR_LFLIST		0x1
+#define DECKERROR_OCGONLY		0x2
+#define DECKERROR_TCGONLY		0x3
+#define DECKERROR_UNKNOWNCARD	0x4
+#define DECKERROR_CARDCOUNT		0x5
+#define DECKERROR_MAINCOUNT		0x6
+#define DECKERROR_EXTRACOUNT	0x7
+#define DECKERROR_SIDECOUNT		0x8
 
 #define MODE_SINGLE		0x0
 #define MODE_MATCH		0x1

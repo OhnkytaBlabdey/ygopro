@@ -31,12 +31,12 @@ public:
 	
 	void DuelEndProc();
 	void WaitforResponse(int playerid);
-	void RefreshMzone(int player, int flag = 0x81fff, int use_cache = 1);
+	void RefreshMzone(int player, int flag = 0x881fff, int use_cache = 1);
 	void RefreshSzone(int player, int flag = 0x681fff, int use_cache = 1);
 	void RefreshHand(int player, int flag = 0x781fff, int use_cache = 1);
 	void RefreshGrave(int player, int flag = 0x81fff, int use_cache = 1);
 	void RefreshExtra(int player, int flag = 0x81fff, int use_cache = 1);
-	void RefreshSingle(int player, int location, int sequence, int flag = 0x781fff);
+	void RefreshSingle(int player, int location, int sequence, int flag = 0xf81fff);
 	
 	static int MessageHandler(long fduel, int type);
 	static void TagTimer(evutil_socket_t fd, short events, void* arg);
@@ -48,9 +48,11 @@ protected:
 	std::set<DuelPlayer*> observers;
 	bool ready[4];
 	Deck pdeck[4];
+	int deck_error[4];
 	unsigned char hand_result[2];
 	unsigned char last_response;
 	Replay last_replay;
+	bool game_started;
 	unsigned char turn_count;
 	unsigned short time_limit[2];
 	unsigned short time_elapsed;
