@@ -28,18 +28,28 @@ void UpdateDeck() {
 	DuelClient::SendBufferToServer(CTOS_UPDATE_DECK, deckbuf, pdeck - deckbuf);
 }
 bool MenuHandler::OnEvent(const irr::SEvent& event) {
+	if(mainGame->dField.OnCommonEvent(event))
+		return false;
 	switch(event.EventType) {
 	case irr::EET_GUI_EVENT: {
 		irr::gui::IGUIElement* caller = event.GUIEvent.Caller;
 		s32 id = caller->getID();
-		if(mainGame->wRules->isVisible() && (id != BUTTON_RULE_OK && (id <CHECK_SEALED_DUEL || id>CHECK_DECK_MASTER_DUEL)))
+		if(mainGame->wRules->isVisible() && (id != BUTTON_RULE_OK && id != CHECKBOX_EXTRA_RULE))
 			break;
-		if(mainGame->wCustomRules->isVisible() && id != BUTTON_CUSTOM_RULE_OK)
+		if(mainGame->wCustomRules->isVisible() && id != BUTTON_CUSTOM_RULE_OK && (id < CHECKBOX_OBSOLETE || id > CHECKBOX_EMZONE))
 			break;
+		if(mainGame->wQuery->isVisible() && id != BUTTON_YES && id != BUTTON_NO) {
+			mainGame->wQuery->getParent()->bringToFront(mainGame->wQuery);
+			break;
+		}
+		if(mainGame->wReplaySave->isVisible() && id != BUTTON_REPLAY_SAVE && id != BUTTON_REPLAY_CANCEL) {
+			mainGame->wReplaySave->getParent()->bringToFront(mainGame->wReplaySave);
+			break;
+		}
 		switch(event.GUIEvent.EventType) {
 		case irr::gui::EGET_ELEMENT_HOVERED: {
 			// Set cursor to an I-Beam if hovering over an edit box
-			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX)
+			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX && event.GUIEvent.Caller->isEnabled())
 			{
 				utils.changeCursor(ECI_IBEAM);
 			}
@@ -47,7 +57,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 		}
 		case irr::gui::EGET_ELEMENT_LEFT: {
 			// Set cursor to normal if left an edit box
-			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX)
+			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX && event.GUIEvent.Caller->isEnabled())
 			{
 				utils.changeCursor(ECI_NORMAL);
 			}
@@ -84,7 +94,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					hints.ai_socktype = SOCK_STREAM;
 					hints.ai_protocol = IPPROTO_TCP;
 					hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
-					int status=evutil_getaddrinfo(hostname, port, &hints, &answer);
+					int status = evutil_getaddrinfo(hostname, port, &hints, &answer);
 					if(status != 0) {
 						mainGame->gMutex.Lock();
 						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1412));
@@ -136,27 +146,34 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				switch (mainGame->cbDuelRule->getSelected()) {
 				case 0: {
 					mainGame->duel_param = MASTER_RULE_1;
+					mainGame->forbiddentypes = MASTER_RULE_1_FORB;
 					break;
 				}
 				case 1: {
 					mainGame->duel_param = MASTER_RULE_2;
+					mainGame->forbiddentypes = MASTER_RULE_2_FORB;
 					break;
 				}
 				case 2: {
 					mainGame->duel_param = MASTER_RULE_3;
+					mainGame->forbiddentypes = MASTER_RULE_3_FORB;
 					break;
 				}
 				case 3: {
 					mainGame->duel_param = MASTER_RULE_4;
+					mainGame->forbiddentypes = MASTER_RULE_4_FORB;
 					break;
 				}
 				}
 				uint32 filter = 0x100;
+				for (int i = 0; i < 6; ++i, filter <<= 1) {
+						mainGame->chkCustomRules[i]->setChecked(mainGame->duel_param & filter);
+					if(i == 3)
+						mainGame->chkCustomRules[4]->setEnabled(mainGame->duel_param & filter);
+				}
+				uint32 limits[] = { TYPE_FUSION, TYPE_SYNCHRO, TYPE_XYZ, TYPE_PENDULUM, TYPE_LINK };
 				for (int i = 0; i < 5; ++i, filter <<= 1)
-					if (mainGame->duel_param & filter)
-						mainGame->chkCustomRules[i]->setChecked(true);
-					else
-						mainGame->chkCustomRules[i]->setChecked(false);
+						mainGame->chkTypeLimit[i]->setChecked(mainGame->forbiddentypes & limits[i]);
 				mainGame->PopupElement(mainGame->wCustomRules);
 				break;
 			}
@@ -219,11 +236,17 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				UpdateDeck();
 				DuelClient::SendPacketToServer(CTOS_HS_READY);
 				mainGame->cbDeckSelect->setEnabled(false);
+				mainGame->cbDeckSelect2->setEnabled(false);
+				if(mainGame->dInfo.isTag || mainGame->dInfo.isRelay)
+					mainGame->btnHostPrepDuelist->setEnabled(false);
 				break;
 			}
 			case BUTTON_HP_NOTREADY: {
 				DuelClient::SendPacketToServer(CTOS_HS_NOTREADY);
 				mainGame->cbDeckSelect->setEnabled(true);
+				mainGame->cbDeckSelect2->setEnabled(true);
+				if(mainGame->dInfo.isTag || mainGame->dInfo.isRelay)
+					mainGame->btnHostPrepDuelist->setEnabled(true);
 				break;
 			}
 			case BUTTON_HP_START: {
@@ -248,6 +271,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				mainGame->HideElement(mainGame->wMainMenu);
 				mainGame->ShowElement(mainGame->wReplay);
 				mainGame->ebRepStartTurn->setText(L"1");
+				mainGame->stReplayInfo->setText(L"");
 				mainGame->RefreshReplay();
 				break;
 			}
@@ -267,6 +291,8 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(mainGame->lstReplayList->getSelected())))
 						break;
 				}
+				if(mainGame->chkYrp->isChecked() && !ReplayMode::cur_replay.LoadYrp())
+					break;
 				mainGame->imgCard->setImage(imageManager.tCover[0]);
 				mainGame->wCardImg->setVisible(true);
 				mainGame->wInfos->setVisible(true);
@@ -276,6 +302,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				mainGame->stDataInfo->setText(L"");
 				mainGame->stSetName->setText(L"");
 				mainGame->stText->setText(L"");
+				mainGame->showingcard = 0;
 				mainGame->scrCardText->setVisible(false);
 				mainGame->wReplayControl->setVisible(true);
 				mainGame->btnReplayStart->setVisible(false);
@@ -290,6 +317,33 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				if(start_turn == 1)
 					start_turn = 0;
 				ReplayMode::StartReplay(start_turn);
+				break;
+			}
+			case BUTTON_DELETE_REPLAY: {
+				int sel = mainGame->lstReplayList->getSelected();
+				if(sel == -1)
+					break;
+				mainGame->gMutex.Lock();
+				wchar_t textBuffer[256];
+				myswprintf(textBuffer, L"%ls\n%ls", mainGame->lstReplayList->getListItem(sel), dataManager.GetSysString(1363));
+				mainGame->SetStaticText(mainGame->stQMessage, 310, mainGame->textFont, (wchar_t*)textBuffer);
+				mainGame->PopupElement(mainGame->wQuery);
+				mainGame->gMutex.Unlock();
+				prev_operation = id;
+				prev_sel = sel;
+				break;
+			}
+			case BUTTON_RENAME_REPLAY: {
+				int sel = mainGame->lstReplayList->getSelected();
+				if(sel == -1)
+					break;
+				mainGame->gMutex.Lock();
+				mainGame->wReplaySave->setText(dataManager.GetSysString(1364));
+				mainGame->ebRSName->setText(mainGame->lstReplayList->getListItem(sel));
+				mainGame->PopupElement(mainGame->wReplaySave);
+				mainGame->gMutex.Unlock();
+				prev_operation = id;
+				prev_sel = sel;
 				break;
 			}
 			case BUTTON_CANCEL_REPLAY: {
@@ -341,6 +395,48 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				mainGame->deckBuilder.Initialize();
 				break;
 			}
+			case BUTTON_YES: {
+				mainGame->HideElement(mainGame->wQuery);
+				if(prev_operation == BUTTON_DELETE_REPLAY) {
+					if(Replay::DeleteReplay(mainGame->lstReplayList->getListItem(prev_sel))) {
+						mainGame->stReplayInfo->setText(L"");
+						mainGame->lstReplayList->removeItem(prev_sel);
+					}
+				}
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
+			case BUTTON_NO: {
+				mainGame->HideElement(mainGame->wQuery);
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
+			case BUTTON_REPLAY_SAVE: {
+				mainGame->HideElement(mainGame->wReplaySave);
+				if(prev_operation == BUTTON_RENAME_REPLAY) {
+					wchar_t newname[256];
+					BufferIO::CopyWStr(mainGame->ebRSName->getText(), newname, 256);
+					if(mywcsncasecmp(newname + wcslen(newname) - 4, L".yrp", 4)) {
+						myswprintf(newname, L"%ls.yrp", mainGame->ebRSName->getText());
+					}
+					if(Replay::RenameReplay(mainGame->lstReplayList->getListItem(prev_sel), newname)) {
+						mainGame->lstReplayList->setItem(prev_sel, newname, -1);
+					} else {
+						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1365));
+					}
+				}
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
+			case BUTTON_REPLAY_CANCEL: {
+				mainGame->HideElement(mainGame->wReplaySave);
+				prev_operation = 0;
+				prev_sel = -1;
+				break;
+			}
 			}
 			break;
 		}
@@ -371,20 +467,31 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				tm* st = localtime(&curtime);
 				myswprintf(infobuf, L"%d/%d/%d %02d:%02d:%02d\n", st->tm_year + 1900, st->tm_mon + 1, st->tm_mday, st->tm_hour, st->tm_min, st->tm_sec);
 				repinfo.append(infobuf);
-				wchar_t namebuf[4][20];
+				wchar_t namebuf[6][20];
 				ReplayMode::cur_replay.ReadName(namebuf[0]);
 				ReplayMode::cur_replay.ReadName(namebuf[1]);
-				if(ReplayMode::cur_replay.pheader.flag & REPLAY_TAG) {
+				if(ReplayMode::cur_replay.pheader.flag & (REPLAY_TAG + REPLAY_RELAY)) {
 					ReplayMode::cur_replay.ReadName(namebuf[2]);
 					ReplayMode::cur_replay.ReadName(namebuf[3]);
 				}
+				if(ReplayMode::cur_replay.pheader.flag & REPLAY_RELAY) {
+					ReplayMode::cur_replay.ReadName(namebuf[4]);
+					ReplayMode::cur_replay.ReadName(namebuf[5]);
+				}
 				if(ReplayMode::cur_replay.pheader.flag & REPLAY_TAG)
 					myswprintf(infobuf, L"%ls\n%ls\n===VS===\n%ls\n%ls\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3]);
+				else if (ReplayMode::cur_replay.pheader.flag & REPLAY_RELAY)
+					myswprintf(infobuf, L"%ls\n%ls\n%ls\n===VS===\n%ls\n%ls\n%ls\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3], namebuf[4], namebuf[5]);
 				else
 					myswprintf(infobuf, L"%ls\n===VS===\n%ls\n", namebuf[0], namebuf[1]);
 				repinfo.append(infobuf);
 				mainGame->ebRepStartTurn->setText(L"1");
 				mainGame->SetStaticText(mainGame->stReplayInfo, 180, mainGame->guiFont, (wchar_t*)repinfo.c_str());
+				if(ReplayMode::cur_replay.pheader.id == 0x31707279) {
+					mainGame->chkYrp->setChecked(false);
+					mainGame->chkYrp->setEnabled(false);
+				} else
+					mainGame->chkYrp->setEnabled(true);
 				break;
 			}
 			}
@@ -410,95 +517,28 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					DuelClient::SendPacketToServer(CTOS_HS_READY);
 					mainGame->cbDeckSelect->setEnabled(false);
 					mainGame->cbDeckSelect2->setEnabled(false);
+					if(mainGame->dInfo.isTag || mainGame->dInfo.isRelay)
+						mainGame->btnHostPrepDuelist->setEnabled(false);
 				} else {
 					DuelClient::SendPacketToServer(CTOS_HS_NOTREADY);
 					mainGame->cbDeckSelect->setEnabled(true);
 					mainGame->cbDeckSelect2->setEnabled(true);
+					if(mainGame->dInfo.isTag || mainGame->dInfo.isRelay)
+						mainGame->btnHostPrepDuelist->setEnabled(true);
 				}
 				break;
 			}
-			case CHECK_SEALED_DUEL: {
-				if (static_cast<irr::gui::IGUICheckBox*>(caller)->isChecked()) {
-					for (int i = 1; i < 14; ++i)
-						if (i != 2 && i != 3 && i != 9)
-						mainGame->chkRules[i]->setEnabled(false);
-				}
-				else {
-					for (int i = 1; i < 14; ++i)
-						if (i != 2 && i != 3 && i != 9)
-						mainGame->chkRules[i]->setEnabled(true);
-				}
+			case CHECKBOX_EXTRA_RULE: {
+				mainGame->UpdateExtraRules();
 				break;
 			}
-			case CHECK_BOOSTER_DUEL: {
-				if (static_cast<irr::gui::IGUICheckBox*>(caller)->isChecked()) {
-					for (int i = 0; i < 14; ++i)
-						if(i != 1 && i != 2 && i != 3 && i != 9)
-						mainGame->chkRules[i]->setEnabled(false);
-				}
+			case CHECKBOX_PZONE: {
+				if(mainGame->chkCustomRules[3]->isChecked())
+					mainGame->chkCustomRules[4]->setEnabled(true);
 				else {
-					for (int i = 0; i < 14; ++i)
-						if (i != 1 && i != 2 && i != 3 && i != 9)
-						mainGame->chkRules[i]->setEnabled(true);
+					mainGame->chkCustomRules[4]->setChecked(false);
+					mainGame->chkCustomRules[4]->setEnabled(false);
 				}
-				break;
-			}
-			case CHECK_CONCENTRATION_DUEL:
-			case CHECK_BOSS_DUEL:
-			case CHECK_BATTLE_CITY:
-			case CHECK_DUELIST_KINGDOM:
-			case CHECK_COMMAND_DUEL:
-			case CHECK_DECK_MASTER_DUEL: {
-				if (static_cast<irr::gui::IGUICheckBox*>(caller)->isChecked()) {
-					for (int i = 0; i < 2; ++i)
-						mainGame->chkRules[i]->setEnabled(false);
-				}
-				else {
-					for (int i = 0; i < 2; ++i)
-						mainGame->chkRules[i]->setEnabled(true);
-					for (int i = 0; i < 16; ++i) {
-						if (mainGame->chkRules[i]->isChecked() && i != 3 && i != 9)
-							for (int i = 0; i < 2; ++i)
-								mainGame->chkRules[i]->setEnabled(false);
-					}
-				}
-				break;
-			}
-			case CHECK_TURBO_DUEL_1: {
-				if (static_cast<irr::gui::IGUICheckBox*>(caller)->isChecked()) {
-					for (int i = 0; i < 3; ++i)
-						mainGame->chkRules[i]->setEnabled(false);
-					mainGame->chkRules[10]->setEnabled(false);
-				}
-				else {
-					for (int i = 0; i < 3; ++i)
-						mainGame->chkRules[i]->setEnabled(true);
-					mainGame->chkRules[10]->setEnabled(true);
-					for (int i = 0; i < 16; ++i) {
-						if (mainGame->chkRules[i]->isChecked() && i != 3 && i != 9)
-							for (int i = 0; i < 1; ++i)
-								mainGame->chkRules[i]->setEnabled(false);
-					}
-				}
-				break;
-			}
-			case CHECK_TURBO_DUEL_2: {
-				if (static_cast<irr::gui::IGUICheckBox*>(caller)->isChecked()) {
-					for (int i = 0; i < 3; ++i)
-						mainGame->chkRules[i]->setEnabled(false);
-					mainGame->chkRules[11]->setEnabled(false);
-				}
-				else {
-					for (int i = 0; i < 3; ++i)
-						mainGame->chkRules[i]->setEnabled(true);
-					mainGame->chkRules[11]->setEnabled(true);
-					for (int i = 0; i < 16; ++i) {
-						if (mainGame->chkRules[i]->isChecked() && i != 3 && i != 9)
-							for (int i = 0; i < 1; ++i)
-								mainGame->chkRules[i]->setEnabled(false);
-					}
-				}
-				break;
 			}
 			}
 			break;
@@ -537,30 +577,28 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				case 0:{
 					mainGame->cbDuelRule->removeItem(4);
 					mainGame->duel_param = MASTER_RULE_1;
+					mainGame->forbiddentypes = MASTER_RULE_1_FORB;
 					break;
 				}
 				case 1: {
 					mainGame->cbDuelRule->removeItem(4);
 					mainGame->duel_param = MASTER_RULE_2;
+					mainGame->forbiddentypes = MASTER_RULE_2_FORB;
 					break;
 				}
 				case 2: {
 					mainGame->cbDuelRule->removeItem(4);
 					mainGame->duel_param = MASTER_RULE_3;
+					mainGame->forbiddentypes = MASTER_RULE_3_FORB;
 					break;
 				}
 				case 3: {
 					mainGame->cbDuelRule->removeItem(4);
 					mainGame->duel_param = MASTER_RULE_4;
+					mainGame->forbiddentypes = MASTER_RULE_4_FORB;
 					break;
 				}
 				}
-				uint32 filter = 0x100;
-				for (int i = 0; i < 5; ++i, filter <<= 1)
-					if (mainGame->duel_param & filter)
-						mainGame->chkCustomRules[i]->setChecked(true);
-					else
-						mainGame->chkCustomRules[i]->setChecked(false);
 			}
 			}
 		}
