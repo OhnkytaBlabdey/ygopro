@@ -69,6 +69,9 @@ void DeckBuilder::Initialize() {
 	mainGame->btnLeaveGame->setVisible(true);
 	mainGame->btnLeaveGame->setText(dataManager.GetSysString(1306));
 	mainGame->btnSideOK->setVisible(false);
+	mainGame->btnSideShuffle->setVisible(false);
+	mainGame->btnSideSort->setVisible(false);
+	mainGame->btnSideReload->setVisible(false);
 	filterList = deckManager._lfList[0].content;
 	mainGame->cbDBLFList->setSelected(0);
 	ClearSearch();
@@ -80,7 +83,6 @@ void DeckBuilder::Initialize() {
 	is_draging = false;
 	prev_deck = mainGame->cbDBDecks->getSelected();
 	prev_operation = 0;
-	shiftpress = false;
 	mainGame->device->setEventReceiver(this);
 }
 void DeckBuilder::Terminate() {
@@ -96,6 +98,13 @@ void DeckBuilder::Terminate() {
 	mainGame->device->setEventReceiver(&mainGame->menuHandler);
 	mainGame->wACMessage->setVisible(false);
 	mainGame->ClearTextures();
+	mainGame->stName->setText(L"");
+	mainGame->stInfo->setText(L"");
+	mainGame->stDataInfo->setText(L"");
+	mainGame->stSetName->setText(L"");
+	mainGame->stText->setText(L"");
+	mainGame->showingcard = 0;
+	mainGame->scrCardText->setVisible(false);
 	mainGame->scrFilter->setVisible(false);
 	int sel = mainGame->cbDBDecks->getSelected();
 	if(sel >= 0)
@@ -204,12 +213,19 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				break;
 			}
 			case BUTTON_SIDE_OK: {
-				if(deckManager.current_deck.main.size() != pre_mainc || deckManager.current_deck.extra.size() != pre_extrac
-				        || deckManager.current_deck.side.size() != pre_sidec) {
+				if(deckManager.current_deck.main.size() != deckManager.pre_deck.main.size() || deckManager.current_deck.extra.size() != deckManager.pre_deck.extra.size()
+				        || deckManager.current_deck.side.size() != deckManager.pre_deck.side.size()) {
 					mainGame->env->addMessageBox(L"", dataManager.GetSysString(1410));
 					break;
 				}
 				mainGame->imgCard->setImage(imageManager.tCover[0]);
+				mainGame->stName->setText(L"");
+				mainGame->stInfo->setText(L"");
+				mainGame->stDataInfo->setText(L"");
+				mainGame->stSetName->setText(L"");
+				mainGame->stText->setText(L"");
+				mainGame->showingcard = 0;
+				mainGame->scrCardText->setVisible(false);
 				char deckbuf[1024];
 				char* pdeck = deckbuf;
 				BufferIO::WriteInt32(pdeck, deckManager.current_deck.main.size() + deckManager.current_deck.extra.size());
@@ -221,6 +237,10 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				for(size_t i = 0; i < deckManager.current_deck.side.size(); ++i)
 					BufferIO::WriteInt32(pdeck, deckManager.current_deck.side[i]->first);
 				DuelClient::SendBufferToServer(CTOS_UPDATE_DECK, deckbuf, pdeck - deckbuf);
+				break;
+			}
+			case BUTTON_SIDE_RELOAD: {
+				deckManager.current_deck = deckManager.pre_deck;
 				break;
 			}
 			case BUTTON_MSG_OK: {
@@ -311,6 +331,10 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				}
 				break;
 			}
+			case EDITBOX_DECK_NAME: {
+				mainGame->ValidateName(mainGame->ebDeckname);
+				break;
+			}
 			}
 			break;
 		}
@@ -322,7 +346,8 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			}
 			case COMBOBOX_DBDECKS: {
 				int sel = mainGame->cbDBDecks->getSelected();
-				deckManager.LoadDeck(mainGame->cbDBDecks->getItem(sel));
+				if(sel >= 0)
+					deckManager.LoadDeck(mainGame->cbDBDecks->getItem(sel));
 				prev_deck = sel;
 				break;
 			}
@@ -560,7 +585,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					auto pointer = dataManager.GetCodePointer(hovered_code);
 					if(pointer == dataManager._datas.end())
 						break;
-					if(shiftpress)
+					if(event.MouseInput.Shift)
 						push_side(pointer);
 					else {
 						if (!check_limit(pointer))
@@ -619,6 +644,8 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 		case irr::EMIE_MOUSE_WHEEL: {
 			if(!mainGame->scrFilter->isVisible())
 				break;
+			if(!mainGame->Resize(805, 160, 1020, 630).isPointInside(mouse_pos))
+				break;
 			if(event.MouseInput.Wheel < 0) {
 				if(mainGame->scrFilter->getPos() < mainGame->scrFilter->getMax())
 					mainGame->scrFilter->setPos(mainGame->scrFilter->getPos() + 1);
@@ -630,18 +657,6 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			break;
 		}
 		default: break;
-		}
-		break;
-	}
-	case irr::EET_KEY_INPUT_EVENT: {
-		switch (event.KeyInput.Key) {
-		case irr::KEY_SHIFT:
-		case irr::KEY_LSHIFT:
-		case irr::KEY_RSHIFT: {
-			shiftpress = event.KeyInput.PressedDown;
-			return true;
-			break;
-		}
 		}
 		break;
 	}
@@ -761,7 +776,11 @@ void DeckBuilder::FilterCards() {
 		return;
 	}
 	unsigned int set_code = 0;
-	if(pstr[0] == 0)
+	if (pstr[0] == L'@')
+		set_code = dataManager.GetSetCode(&pstr[1]);
+	else
+		set_code = dataManager.GetSetCode(&pstr[0]);
+	if (pstr[0] == 0 || (pstr[0] == L'$' && pstr[1] == 0) || (pstr[0] == L'@' && pstr[1] == 0))
 		pstr = 0;
 	auto strpointer = dataManager._strings.begin();
 	for(code_pointer ptr = dataManager._datas.begin(); ptr != dataManager._datas.end(); ++ptr, ++strpointer) {
@@ -843,9 +862,15 @@ void DeckBuilder::FilterCards() {
 				continue;
 		}
 		if(pstr) {
-			if(!(CardNameCompare(text.name, pstr)) && !(CardNameCompare(text.text, pstr))) {
-				set_code = dataManager.GetSetCode(&pstr[0]);
-				if (!set_code || !check_set_code(data, set_code))
+			if(pstr[0] == L'$') {
+				if(!CardNameCompare(text.name.c_str(), &pstr[1]))
+					continue;
+			} else if(pstr[0] == L'@' && set_code) {
+				if(!check_set_code(data, set_code))
+					continue;
+			} else {
+				if(!CardNameCompare(text.name.c_str(), pstr) && !(CardNameCompare(text.text.c_str(), pstr))
+					&& (!set_code || !check_set_code(data, set_code)))
 					continue;
 			}
 		}
@@ -862,26 +887,38 @@ void DeckBuilder::FilterCards() {
 	}
 	SortList();
 }
-bool DeckBuilder::CardNameCompare(const wchar_t *sa, const wchar_t *sb)
-{
-	int i = 0;
-	int j = 0;
-	wchar_t ca;
-	wchar_t cb;
-
-	if (!sa || !sb)
+bool DeckBuilder::CardNameCompare(const wchar_t *sa, const wchar_t *sb) {
+	if(!sa || !sb || (wcslen(sb) > wcslen(sa)))
 		return false;
-	while (sa[i])
-	{
+	int i = 0, j = 0, k;
+	wchar_t ca, cb, pwc, wc = L'*';
+	bool wcr = false;
+	while(sa[i]) {
 		ca = towupper(sa[i]);
 		cb = towupper(sb[j]);
-		if (ca == cb)
-		{
+		if(ca == cb) {
 			j++;
-			if (!sb[j])
+			if(!sb[j])
 				return true;
-		}
-		else
+		} else if(cb == wc) {
+			while(sb[j] == wc) {
+				j++;
+				if(!sb[j])
+					return true;
+			}
+			k = j;
+			pwc = towupper(sb[j]);
+			wcr = true;
+			while(towupper(sa[i]) != pwc) {
+				i++;
+				if(!sa[i])
+					return false;
+			}
+			i--;
+		} else if(wcr && ca == pwc) {
+			j = k;
+			i--;
+		} else
 			j = 0;
 		i++;
 	}
@@ -945,8 +982,7 @@ bool DeckBuilder::push_main(code_pointer pointer, int seq) {
 	if(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK))
 		return false;
 	auto& container = deckManager.current_deck.main;
-	int maxc = mainGame->is_siding ? 64 : 60;
-	if((int)container.size() >= maxc)
+	if(!mainGame->is_siding && (int)container.size() >= 60)
 		return false;
 	if(seq >= 0 && seq < (int)container.size())
 		container.insert(container.begin() + seq, pointer);
@@ -959,8 +995,7 @@ bool DeckBuilder::push_extra(code_pointer pointer, int seq) {
 	if(!(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK)))
 		return false;
 	auto& container = deckManager.current_deck.extra;
-	int maxc = mainGame->is_siding ? 20 : 15;
-	if((int)container.size() >= maxc)
+	if(!mainGame->is_siding && (int)container.size() >= 15)
 		return false;
 	if(seq >= 0 && seq < (int)container.size())
 		container.insert(container.begin() + seq, pointer);
@@ -971,8 +1006,7 @@ bool DeckBuilder::push_extra(code_pointer pointer, int seq) {
 }
 bool DeckBuilder::push_side(code_pointer pointer, int seq) {
 	auto& container = deckManager.current_deck.side;
-	int maxc = mainGame->is_siding ? 20 : 15;
-	if((int)container.size() >= maxc)
+	if(!mainGame->is_siding && (int)container.size() >= 15)
 		return false;
 	if(seq >= 0 && seq < (int)container.size())
 		container.insert(container.begin() + seq, pointer);

@@ -13,7 +13,7 @@ struct ChainInfo {
 	irr::core::vector3df chain_pos;
 	ClientCard* chain_card;
 	int code;
-	int desc;
+	u64 desc;
 	int controler;
 	int location;
 	int sequence;
@@ -40,8 +40,8 @@ public:
 	std::vector<ClientCard*> activatable_cards;
 	std::vector<ClientCard*> attackable_cards;
 	std::vector<ClientCard*> conti_cards;
-	std::vector<std::pair<int,int>> activatable_descs;
-	std::vector<int> select_options;
+	std::vector<std::pair<u64,int>> activatable_descs;
+	std::vector<u64> select_options;
 	std::vector<ChainInfo> chains;
 	int extra_p_count[2];
 
@@ -55,8 +55,8 @@ public:
 	int select_max;
 	int must_select_count;
 	int select_sumval;
-	int select_cancelable;
 	int select_mode;
+	bool select_cancelable;
 	bool select_panalmode;
 	bool select_ready;
 	int announce_count;
@@ -138,6 +138,7 @@ public:
 	void ShowCancelOrFinishButton(int buttonOp);
 	void SetShowMark(ClientCard* pcard, bool enable);
 	void SetResponseSelectedCards() const;
+	void CancelOrFinish();
 };
 
 }

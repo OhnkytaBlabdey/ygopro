@@ -1,5 +1,5 @@
-#ifndef SINGLE_DUEL_H
-#define SINGLE_DUEL_H
+#ifndef RELAY_DUEL_H
+#define RELAY_DUEL_H
 
 #include "config.h"
 #include "network.h"
@@ -7,10 +7,10 @@
 
 namespace ygo {
 
-class SingleDuel: public DuelMode {
+class RelayDuel: public DuelMode {
 public:
-	SingleDuel(bool is_match);
-	virtual ~SingleDuel();
+	RelayDuel();
+	virtual ~RelayDuel();
 	virtual void Chat(DuelPlayer* dp, void* pdata, int len);
 	virtual void JoinGame(DuelPlayer* dp, void* pdata, bool is_creater);
 	virtual void LeaveGame(DuelPlayer* dp);
@@ -39,33 +39,37 @@ public:
 	void RefreshSingle(int player, int location, int sequence, int flag = 0xf81fff);
 	
 	static int MessageHandler(long fduel, int type);
-	static void SingleTimer(evutil_socket_t fd, short events, void* arg);
+	static void RelayTimer(evutil_socket_t fd, short events, void* arg);
 
 	void PseudoRefreshDeck(int player, int flag = 0x181fff);
 	static std::vector<ReplayPacket> replay_stream;
 	
 protected:
-	DuelPlayer* players[2];
-	DuelPlayer* pplayer[2];
-	bool ready[2];
-	Deck pdeck[2];
-	int deck_error[2];
+	class duelist {
+		public:
+		DuelPlayer* player;
+		bool ready;
+		Deck pdeck;
+		int deck_error;
+		duelist() : player(0), ready(false), deck_error(0) {}
+		duelist(DuelPlayer* _player) : player(_player), ready(false), deck_error(0) {}
+	};
+	duelist players[6];
+	unsigned char startp[2];
+	unsigned char endp[2];
+	DuelPlayer* cur_player[2];
+	std::set<DuelPlayer*> observers;
 	unsigned char hand_result[2];
 	unsigned char last_response;
-	std::set<DuelPlayer*> observers;
 	Replay last_replay;
 	Replay new_replay;
-	bool match_mode;
-	int match_kill;
 	bool game_started;
-	unsigned char duel_count;
-	unsigned char tp_player;
-	unsigned char match_result[3];
+	unsigned char turn_count;
 	unsigned short time_limit[2];
 	unsigned short time_elapsed;
 };
 
 }
 
-#endif //SINGLE_DUEL_H
+#endif //RELAY_DUEL_H
 
