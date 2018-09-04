@@ -4,6 +4,7 @@
 #include "config.h"
 #include <vector>
 #include <set>
+#include <map>
 #include <unordered_map>
 
 namespace ygo {
@@ -106,6 +107,7 @@ public:
 	wchar_t atkstring[16];
 	wchar_t defstring[16];
 	wchar_t lvstring[16];
+	wchar_t rkstring[16];
 	wchar_t linkstring[16];
 	wchar_t lscstring[16];
 	wchar_t rscstring[16];

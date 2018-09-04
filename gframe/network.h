@@ -22,6 +22,10 @@ struct HostInfo {
 	unsigned char start_hand;
 	unsigned char draw_count;
 	unsigned short time_limit;
+	unsigned char check;
+	unsigned int duel_flag;
+	int forbiddentypes;
+	unsigned short extra_rules;
 };
 struct HostPacket {
 	unsigned short identifier;
@@ -197,6 +201,9 @@ public:
 #define STOC_HS_PLAYER_CHANGE	0x21
 #define STOC_HS_WATCH_CHANGE	0x22
 
+
+#define STOC_NEW_REPLAY			0x30
+
 #define PLAYERCHANGE_OBSERVE	0x8
 #define PLAYERCHANGE_READY		0x9
 #define PLAYERCHANGE_NOTREADY	0xa
@@ -215,8 +222,24 @@ public:
 #define DECKERROR_MAINCOUNT		0x6
 #define DECKERROR_EXTRACOUNT	0x7
 #define DECKERROR_SIDECOUNT		0x8
+#define DECKERROR_FORBTYPE		0x9
 
 #define MODE_SINGLE		0x0
 #define MODE_MATCH		0x1
 #define MODE_TAG		0x2
+#define MODE_RELAY		0x3
+
+#define SEALED_DUEL			0x1
+#define BOOSTER_DUEL		0x2
+#define DESTINY_DRAW		0x4
+#define DUEL_SPEED			0x8
+#define CONCENTRATION_DUEL	0x10
+#define BOSS_DUEL			0x20
+#define BATTLE_CITY			0x40
+#define DUELIST_KINGDOM		0x80
+#define DIMENSTION_DUEL		0x100
+#define TURBO_DUEL			0x200
+#define DOUBLE_DECK			0x400
+#define COMMAND_DUEL		0x800
+#define DECK_MASTER			0x1000
 #endif //NETWORK_H

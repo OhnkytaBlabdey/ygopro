@@ -4,6 +4,7 @@
 #include "config.h"
 #include <vector>
 #include <set>
+#include <map>
 
 namespace ygo {
 
@@ -13,7 +14,7 @@ struct ChainInfo {
 	irr::core::vector3df chain_pos;
 	ClientCard* chain_card;
 	int code;
-	int desc;
+	u64 desc;
 	int controler;
 	int location;
 	int sequence;
@@ -30,6 +31,7 @@ public:
 	std::vector<ClientCard*> grave[2];
 	std::vector<ClientCard*> remove[2];
 	std::vector<ClientCard*> extra[2];
+	std::vector<ClientCard*> limbo_temp;
 	std::set<ClientCard*> overlay_cards;
 	std::vector<ClientCard*> summonable_cards;
 	std::vector<ClientCard*> spsummonable_cards;
@@ -39,8 +41,8 @@ public:
 	std::vector<ClientCard*> activatable_cards;
 	std::vector<ClientCard*> attackable_cards;
 	std::vector<ClientCard*> conti_cards;
-	std::vector<std::pair<int,int>> activatable_descs;
-	std::vector<int> select_options;
+	std::vector<std::pair<u64,int>> activatable_descs;
+	std::vector<u64> select_options;
 	std::vector<ChainInfo> chains;
 	int extra_p_count[2];
 
@@ -96,6 +98,7 @@ public:
 	void ShowSelectCard(bool buttonok = false, bool chain = false);
 	void ShowChainCard();
 	void ShowLocationCard();
+	void ShowSelectOption(int select_hint = 0);
 	void ReplaySwap();
 	void RefreshAllCards();
 
@@ -137,6 +140,7 @@ public:
 	void ShowCancelOrFinishButton(int buttonOp);
 	void SetShowMark(ClientCard* pcard, bool enable);
 	void SetResponseSelectedCards() const;
+	void SetResponseSelectedOption() const;
 	void CancelOrFinish();
 };
 

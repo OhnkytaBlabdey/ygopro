@@ -13,6 +13,7 @@
 #include "data_manager.h"
 #include "deck_manager.h"
 #include "../ocgcore/mtrandom.h"
+#include "replay.h"
 
 namespace ygo {
 
@@ -29,10 +30,15 @@ private:
 	static char duel_client_read[0x2000];
 	static char duel_client_write[0x2000];
 	static bool is_closing;
-	static int select_hint;
+	static u64 select_hint;
 	static wchar_t event_string[256];
 	static mtrandom rnd;
 public:
+	static unsigned int temp_ip;
+	static unsigned short temp_port;
+	static unsigned short temp_ver;
+	static bool try_needed;
+
 	static bool StartClient(unsigned int ip, unsigned short port, bool create_game = true);
 	static void ConnectTimeout(evutil_socket_t fd, short events, void* arg);
 	static void StopClient(bool is_exiting = false);
@@ -40,6 +46,9 @@ public:
 	static void ClientEvent(bufferevent *bev, short events, void *ctx);
 	static int ClientThread(void* param);
 	static void HandleSTOCPacketLan(char* data, unsigned int len);
+	static std::vector<ReplayPacket> replay_stream;
+	static Replay last_replay;
+	static bool old_replay;
 	static int ClientAnalyze(char* msg, unsigned int len);
 	static void SetResponseI(int respI);
 	static void SetResponseB(void* respB, unsigned char len);

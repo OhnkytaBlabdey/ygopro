@@ -36,7 +36,12 @@ bool DataManager::LoadDB(const char* file) {
 			} else
 				cd.link_marker = 0;
 			unsigned int level = sqlite3_column_int(pStmt, 7);
-			cd.level = level & 0xff;
+			if((level & 0x80000000) != 0) {
+				level = -level;
+				cd.level = -(level & 0xff);
+			}
+			else
+				cd.level = level & 0xff;
 			cd.lscale = (level >> 24) & 0xff;
 			cd.rscale = (level >> 16) & 0xff;
 			cd.race = sqlite3_column_int(pStmt, 8);
@@ -142,10 +147,10 @@ const wchar_t* DataManager::GetText(int code) {
 		return csit->second.text.c_str();
 	return unknown_string;
 }
-const wchar_t* DataManager::GetDesc(int strCode) {
+const wchar_t* DataManager::GetDesc(u64 strCode) {
 	if(strCode < 10000)
 		return GetSysString(strCode);
-	int code = strCode >> 4;
+	u64 code = strCode >> 4;
 	int offset = strCode & 0xf;
 	auto csit = _strings.find(code);
 	if(csit == _strings.end())

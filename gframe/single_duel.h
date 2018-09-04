@@ -38,8 +38,12 @@ public:
 	void RefreshExtra(int player, int flag = 0x81fff, int use_cache = 1);
 	void RefreshSingle(int player, int location, int sequence, int flag = 0xf81fff);
 	
+	static byte* ScriptReaderEx(const char* script_name, int* slen);
 	static int MessageHandler(long fduel, int type);
 	static void SingleTimer(evutil_socket_t fd, short events, void* arg);
+
+	void PseudoRefreshDeck(int player, int flag = 0x181fff);
+	static std::vector<ReplayPacket> replay_stream;
 	
 protected:
 	DuelPlayer* players[2];
@@ -51,6 +55,7 @@ protected:
 	unsigned char last_response;
 	std::set<DuelPlayer*> observers;
 	Replay last_replay;
+	Replay new_replay;
 	bool match_mode;
 	int match_kill;
 	bool game_started;
