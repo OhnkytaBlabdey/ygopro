@@ -9,23 +9,27 @@
 #include <vector>
 #include <list>
 #include "CGUISkinSystem/CGUISkinSystem.h"
+#include "CGUICustomText/CGUICustomText.h"
+#include "CGUIFileSelectListBox/CGUIFileSelectListBox.h"
+#include "deck_manager.h"
 
 namespace ygo {
 
 struct Config {
 	bool use_d3d;
+	int max_fps;
 	bool fullscreen;
 	unsigned short antialias;
-	wchar_t serverport[20];
+	std::wstring serverport;
 	unsigned char textfontsize;
-	wchar_t lasthost[100];
-	wchar_t lastport[10];
-	wchar_t nickname[20];
-	wchar_t gamename[20];
-	wchar_t lastdeck[64];
-	wchar_t textfont[256];
-	wchar_t numfont[256];
-	wchar_t roompass[20];
+	std::wstring lasthost;
+	std::wstring lastport;
+	std::wstring nickname;
+	std::wstring gamename;
+	std::wstring lastdeck;
+	std::wstring textfont;
+	std::wstring numfont;
+	std::wstring roompass;
 	//settings
 	int chkMAutoPos;
 	int chkSTAutoPos;
@@ -37,6 +41,7 @@ struct Config {
 	int chkHideSetname;
 	int chkHideHintButton;
 	int draw_field_spell;
+	int quick_animation;
 
 	int chkAnime;
 	bool enablesound;
@@ -63,10 +68,10 @@ struct DuelInfo {
 	int extraval;
 	int turn;
 	short curMsg;
-	wchar_t clientname[3][20];
-	wchar_t hostname[3][20];
-	wchar_t strLP[2][16];
-	wchar_t* vic_string;
+	std::wstring clientname[3];
+	std::wstring hostname[3];
+	std::wstring strLP[2];
+	std::wstring vic_string;
 	unsigned char player_type;
 	unsigned char time_player;
 	unsigned short time_limit;
@@ -77,13 +82,13 @@ struct DuelInfo {
 struct FadingUnit {
 	bool signalAction;
 	bool isFadein;
-	int fadingFrame;
+	float fadingFrame;
 	int autoFadeoutFrame;
 	irr::gui::IGUIElement* guiFading;
 	irr::core::recti fadingSize;
 	irr::core::vector2di fadingUL;
 	irr::core::vector2di fadingLR;
-	irr::core::vector2di fadingDiff;
+	irr::core::vector2di fadingDest;
 };
 
 struct Fieldmatrix {
@@ -96,8 +101,6 @@ public:
 	bool Initialize();
 	void MainLoop();
 	void BuildProjectionMatrix(irr::core::matrix4& mProjection, f32 left, f32 right, f32 bottom, f32 top, f32 znear, f32 zfar);
-	void InitStaticText(irr::gui::IGUIStaticText* pControl, u32 cWidth, u32 cHeight, irr::gui::CGUITTFont* font, const wchar_t* text);
-	void SetStaticText(irr::gui::IGUIStaticText* pControl, u32 cWidth, irr::gui::CGUITTFont* font, const wchar_t* text, u32 pos = 0);
 	void LoadExpansionDB();
 	void RefreshDeck(irr::gui::IGUIComboBox* cbDeck);
 	void RefreshReplay();
@@ -113,7 +116,7 @@ public:
 	void DrawMisc();
 	void DrawStatus(ClientCard* pcard);
 	void DrawPendScale(ClientCard* pcard);
-	void DrawStackIndicator(const wchar_t* text, S3DVertex* v, bool opponent);
+	void DrawStackIndicator(const std::wstring& text, S3DVertex* v, bool opponent);
 	void ConvertCoords(float x, float y, int* x1, int* y1);
 	void DrawGUI();
 	void DrawSpec();
@@ -122,24 +125,25 @@ public:
 	void HideElement(irr::gui::IGUIElement* element, bool set_action = false);
 	void PopupElement(irr::gui::IGUIElement* element, int hideframe = 0);
 	void WaitFrameSignal(int frame);
-	void DrawThumb(code_pointer cp, position2di pos, std::unordered_map<int, int>* lflist, bool drag = false);
+	void DrawThumb(code_pointer cp, position2di pos, LFList* lflist, bool drag = false, recti* cliprect = nullptr, bool loadimage = true);
 	void DrawDeckBd();
-	bool LoadGui(irr::SIrrlichtCreationParameters params, bool reload = false);
 	void LoadConfig();
 	void SaveConfig();
 	void ShowCardInfo(int code, bool resize = false);
-	void AddChatMsg(wchar_t* msg, int player);
+	void ClearCardInfo(int player = 0);
+	void AddChatMsg(const std::wstring& msg, int player);
 	void ClearChatMsg();
-	void AddDebugMsg(char* msgbuf);
+	void AddDebugMsg(const std::string& msg);
+	void ErrorLog(const std::string& msg);
 	void ClearTextures();
 	void CloseDuelWindow();
 	bool PlayChant(unsigned int code);
-	void PlaySoundEffect(char* sound);
-	void PlayMusic(char* song, bool loop);
+	void PlaySoundEffect(const std::string& sound);
+	void PlayMusic(const std::string& song, bool loop);
 	void PlayBGM();
 
 	int LocalPlayer(int player);
-	const wchar_t* LocalName(int local_player);
+	std::wstring LocalName(int local_player);
 	void UpdateDuelParam();
 	void UpdateExtraRules();
 	int GetMasterRule(uint32 param, uint32 forbidden, int* truerule = 0);
@@ -153,52 +157,60 @@ public:
 	void OnResize();
 	recti Resize(s32 x, s32 y, s32 x2, s32 y2);
 	recti Resize(s32 x, s32 y, s32 x2, s32 y2, s32 dx, s32 dy, s32 dx2, s32 dy2);
-	position2di Resize(s32 x, s32 y, bool reverse = false);
+	vector2d<s32> Resize(s32 x, s32 y, bool reverse = false);
 	recti ResizeElem(s32 x, s32 y, s32 x2, s32 y2);
 	recti ResizeWin(s32 x, s32 y, s32 x2, s32 y2, bool chat = false);
-	void ValidateName(irr::gui::IGUIEditBox* box);
-	std::wstring ReadPuzzleMessage(const char* script_name);
+	void ValidateName(irr::gui::IGUIElement* box);
+	static std::vector<std::wstring> tokenize(std::wstring input, const std::wstring& token);
+	static bool CompareStrings(std::wstring input, const std::vector<std::wstring>& tokens, bool transform_input = false, bool transform_token = false);
+	static bool CompareStrings(std::wstring input, const std::wstring& second_term, bool transform_input = false, bool transform_term = false);
+	std::wstring ReadPuzzleMessage(const std::wstring& script_name);
+	unsigned long SetupDuel(uint32 seed);
+	std::string LoadScript(const std::string& script_name, int& slen);
+	static byte* ScriptReader(const char* script_name, int* slen);
+	static int MessageHandler(long fduel, int type);
 
-	Mutex gMutex;
-	Mutex gBuffer;
+	std::mutex gMutex;
 	Signal frameSignal;
 	Signal actionSignal;
 	Signal replaySignal;
 	Signal singleSignal;
-	Signal closeSignal;
+	std::mutex closeSignal;
 	Signal closeDoneSignal;
 	Config gameConf;
 	DuelInfo dInfo;
-
+#ifdef YGOPRO_BUILD_DLL
+	void* ocgcore;
+#endif
+	bool coreloaded;
 	std::list<FadingUnit> fadingList;
 	std::vector<int> logParam;
 	std::wstring chatMsg[8];
-	std::vector<std::wstring> BGMList;
+	std::vector<std::string> BGMList;
 
+	uint32 delta_time;
 	int hideChatTimer;
 	bool hideChat;
-	int chatTiming[8];
+	float chatTiming[8];
 	int chatType[8];
 	unsigned short linePatternD3D;
-	unsigned short linePatternGL;
-	int waitFrame;
+	float waitFrame;
 	int signalFrame;
 	int saveReplay;
-	const wchar_t* showingtext;
 	int showcard;
 	int showcardcode;
-	int showcarddif;
-	int showcardp;
-	int is_attacking;
-	int attack_sv;
+	float showcarddif;
+	float showcardp;
+	bool is_attacking;
+	float attack_sv;
 	irr::core::vector3df atk_r;
 	irr::core::vector3df atk_t;
 	float atkdy;
 	int lpframe;
-	int lpd;
+	float lpd;
 	int lpplayer;
 	int lpccolor;
-	wchar_t* lpcstring;
+	std::wstring lpcstring;
 	bool always_chain;
 	bool ignore_chain;
 	bool chain_when_avail;
@@ -209,6 +221,7 @@ public:
 	unsigned short extra_rules;
 	uint32 duel_param;
 	uint32 showingcard;
+	bool cardimagetextureloading;
 
 	irr::core::dimension2d<irr::u32> window_size;
 
@@ -221,6 +234,9 @@ public:
 	irr::video::IVideoDriver* driver;
 	irr::scene::ISceneManager* smgr;
 	irr::scene::ICameraSceneNode* camera;
+	io::IFileSystem* filesystem;
+	void PopulateResourcesDirectories();
+	std::vector<std::string> resource_dirs;
 	//GUI
 	irr::gui::IGUIEnvironment* env;
 	irr::gui::CGUITTFont* guiFont;
@@ -235,6 +251,7 @@ public:
 	//hint text
 	irr::gui::IGUIStaticText* stHintMsg;
 	irr::gui::IGUIStaticText* stTip;
+	irr::gui::IGUIStaticText* stCardListTip;
 	//infos
 	irr::gui::IGUITabControl* wInfos;
 	irr::gui::IGUIStaticText* stName;
@@ -243,7 +260,6 @@ public:
 	irr::gui::IGUIStaticText* stSetName;
 	irr::gui::IGUIStaticText* stText;
 	irr::gui::IGUIStaticText* stVolume;
-	irr::gui::IGUIScrollBar* scrCardText;
 	irr::gui::IGUIListBox* lstLog;
 	irr::gui::IGUIButton* btnClearLog;
 	irr::gui::IGUIButton* btnSaveLog;
@@ -252,6 +268,7 @@ public:
 	irr::gui::IGUICheckBox* chkRandomPos;
 	irr::gui::IGUICheckBox* chkAutoChain;
 	irr::gui::IGUICheckBox* chkWaitChain;
+	irr::gui::IGUICheckBox* chkQuickAnimation;
 	irr::gui::IGUICheckBox* chkHideSetname;
 	irr::gui::IGUICheckBox* chkHideHintButton;
 	irr::gui::IGUICheckBox* chkEnableSound;
@@ -323,7 +340,7 @@ public:
 	irr::gui::IGUIButton* btnHostPrepCancel;
 	//replay
 	irr::gui::IGUIWindow* wReplay;
-	irr::gui::IGUIListBox* lstReplayList;
+	irr::gui::CGUIFileSelectListBox* lstReplayList;
 	irr::gui::IGUIStaticText* stReplayInfo;
 	irr::gui::IGUICheckBox* chkYrp;
 	irr::gui::IGUIButton* btnLoadReplay;
@@ -333,7 +350,7 @@ public:
 	irr::gui::IGUIEditBox* ebRepStartTurn;
 	//single play
 	irr::gui::IGUIWindow* wSinglePlay;
-	irr::gui::IGUIListBox* lstSinglePlayList;
+	irr::gui::CGUIFileSelectListBox* lstSinglePlayList;
 	irr::gui::IGUIStaticText* stSinglePlayInfo;
 	irr::gui::IGUIButton* btnLoadSinglePlay;
 	irr::gui::IGUIButton* btnSinglePlayCancel;
@@ -568,6 +585,10 @@ extern Game* mainGame;
 #define BUTTON_CANCEL_REPLAY		132
 #define BUTTON_DELETE_REPLAY		133
 #define BUTTON_RENAME_REPLAY		134
+#ifdef BUILD_WITH_AI
+#define BUTTON_AI_START				135
+#define BUTTON_AI_CANCEL			136
+#endif //BUILD_WITH_AI
 #define EDITBOX_CHAT				140
 #define EDITBOX_PORT_BOX			141
 #define BUTTON_MSG_OK				200
@@ -598,6 +619,7 @@ extern Game* mainGame;
 #define BUTTON_CARD_4				234
 #define SCROLL_CARD_SELECT			235
 #define BUTTON_CARD_SEL_OK			236
+#define TEXT_CARD_LIST_TIP			237
 #define BUTTON_CMD_ACTIVATE			240
 #define BUTTON_CMD_SUMMON			241
 #define BUTTON_CMD_SPSUMMON			242
@@ -624,7 +646,7 @@ extern Game* mainGame;
 #define BUTTON_CANCEL_OR_FINISH		267
 #define BUTTON_CLEAR_LOG			270
 #define LISTBOX_LOG					271
-#define SCROLL_CARDTEXT				280
+//#define SCROLL_CARDTEXT				280
 #define BUTTON_DISPLAY_0			290
 #define BUTTON_DISPLAY_1			291
 #define BUTTON_DISPLAY_2			292
@@ -668,6 +690,7 @@ extern Game* mainGame;
 #define CHECKBOX_ENABLE_MUSIC		366
 #define SCROLL_VOLUME				367
 #define CHECKBOX_SHOW_ANIME			368
+#define CHECKBOX_QUICK_ANIMATION	369
 #define COMBOBOX_SORTTYPE			370
 
 #define BUTTON_MARKS_FILTER			380
@@ -683,4 +706,6 @@ extern Game* mainGame;
 #define DEFAULT_DUEL_RULE			4
 
 #define CARD_ARTWORK_VERSIONS_OFFSET	10
+
+#define DECK_SEARCH_SCROLL_STEP		100
 #endif // GAME_H

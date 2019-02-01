@@ -1,10 +1,11 @@
 #include "data_manager.h"
+#include "game.h"
 #include <stdio.h>
+#include <fstream>
 
 namespace ygo {
 
 const wchar_t* DataManager::unknown_string = L"???";
-wchar_t DataManager::strBuffer[4096];
 DataManager dataManager;
 
 bool DataManager::LoadDB(const char* file) {
@@ -35,9 +36,8 @@ bool DataManager::LoadDB(const char* file) {
 				cd.defense = 0;
 			} else
 				cd.link_marker = 0;
-			unsigned int level = sqlite3_column_int(pStmt, 7);
-			if((level & 0x80000000) != 0) {
-				level = -level;
+			int level = sqlite3_column_int(pStmt, 7);
+			if(level < 0) {
 				cd.level = -(level & 0xff);
 			}
 			else
@@ -49,17 +49,14 @@ bool DataManager::LoadDB(const char* file) {
 			cd.category = sqlite3_column_int(pStmt, 10);
 			_datas.insert(std::make_pair(cd.code, cd));
 			if(const char* text = (const char*)sqlite3_column_text(pStmt, 12)) {
-				BufferIO::DecodeUTF8(text, strBuffer);
-				cs.name = strBuffer;
+				cs.name = BufferIO::DecodeUTF8s(text);
 			}
 			if(const char* text = (const char*)sqlite3_column_text(pStmt, 13)) {
-				BufferIO::DecodeUTF8(text, strBuffer);
-				cs.text = strBuffer;
+				cs.text = BufferIO::DecodeUTF8s(text);
 			}
 			for(int i = 0; i < 16; ++i) {
 				if(const char* text = (const char*)sqlite3_column_text(pStmt, i + 14)) {
-					BufferIO::DecodeUTF8(text, strBuffer);
-					cs.desc[i] = strBuffer;
+					cs.desc[i] = BufferIO::DecodeUTF8s(text);
 				}
 			}
 			_strings.emplace(cd.code, cs);
@@ -70,41 +67,37 @@ bool DataManager::LoadDB(const char* file) {
 	return true;
 }
 bool DataManager::LoadStrings(const char* file) {
-	FILE* fp = fopen(file, "r");
-	if(!fp)
+	std::ifstream string_file(file, std::ifstream::in);
+	if(!string_file.is_open())
 		return false;
-	char linebuf[256];
-	char strbuf[256];
-	int value;
-	while(fgets(linebuf, 256, fp)) {
-		if(linebuf[0] != '!')
+	std::string str;
+	while(std::getline(string_file, str)) {
+		auto pos = str.find_first_of("\n\r");
+		if(str.size() && pos != std::string::npos)
+			str = str.substr(0, pos);
+		if(str.empty() || str.at(0) != '!') {
 			continue;
-		sscanf(linebuf, "!%s", strbuf);
-		if(!strcmp(strbuf, "system")) {
-			sscanf(&linebuf[7], "%d %240[^\n]", &value, strbuf);
-			BufferIO::DecodeUTF8(strbuf, strBuffer);
-			_sysStrings[value] = strBuffer;
-		} else if(!strcmp(strbuf, "victory")) {
-			sscanf(&linebuf[8], "%x %240[^\n]", &value, strbuf);
-			BufferIO::DecodeUTF8(strbuf, strBuffer);
-			_victoryStrings[value] = strBuffer;
-		} else if(!strcmp(strbuf, "counter")) {
-			sscanf(&linebuf[8], "%x %240[^\n]", &value, strbuf);
-			BufferIO::DecodeUTF8(strbuf, strBuffer);
-			_counterStrings[value] = strBuffer;
-		} else if(!strcmp(strbuf, "setname")) {
-			sscanf(&linebuf[8], "%x %240[^\t\n]", &value, strbuf);//using tab for comment
-			BufferIO::DecodeUTF8(strbuf, strBuffer);
-			_setnameStrings[value] = strBuffer;
 		}
+		 pos = str.find(' ');
+		auto type = str.substr(1, pos - 1);
+		str = str.substr(pos + 1);
+		pos = str.find(' ');
+		auto value = str.substr(0, pos);
+		str = str.substr(pos + 1);
+		if(type == "system")
+			_sysStrings[std::stoi(value)] = BufferIO::DecodeUTF8s(str);
+		else if(type == "victory")
+			_victoryStrings[std::stoi(value, 0, 16)] = BufferIO::DecodeUTF8s(str);
+		else if(type == "counter")
+			_counterStrings[std::stoi(value, 0, 16)] = BufferIO::DecodeUTF8s(str);
+		else if(type == "setname")
+			_setnameStrings[std::stoi(value, 0, 16)] = BufferIO::DecodeUTF8s(str);
 	}
-	fclose(fp);
-	for(int i = 0; i < 255; ++i)
-		myswprintf(numStrings[i], L"%d", i);
+	string_file.close();
 	return true;
 }
 bool DataManager::Error(sqlite3* pDB, sqlite3_stmt* pStmt) {
-	BufferIO::DecodeUTF8(sqlite3_errmsg(pDB), strBuffer);
+	auto error = sqlite3_errmsg(pDB);
 	if(pStmt)
 		sqlite3_finalize(pStmt);
 	sqlite3_close(pDB);
@@ -131,79 +124,69 @@ bool DataManager::GetString(int code, CardString* pStr) {
 	*pStr = csit->second;
 	return true;
 }
-const wchar_t* DataManager::GetName(int code) {
+std::wstring DataManager::GetName(int code) {
 	auto csit = _strings.find(code);
-	if(csit == _strings.end())
+	if(csit == _strings.end() || csit->second.name.empty())
 		return unknown_string;
-	if(!csit->second.name.empty())
-		return csit->second.name.c_str();
-	return unknown_string;
+	return csit->second.name;
 }
-const wchar_t* DataManager::GetText(int code) {
+std::wstring DataManager::GetText(int code) {
 	auto csit = _strings.find(code);
-	if(csit == _strings.end())
+	if(csit == _strings.end() || csit->second.text.empty())
 		return unknown_string;
-	if(!csit->second.text.empty())
-		return csit->second.text.c_str();
-	return unknown_string;
+	return csit->second.text;
 }
-const wchar_t* DataManager::GetDesc(u64 strCode) {
+std::wstring DataManager::GetDesc(u64 strCode) {
 	if(strCode < 10000)
 		return GetSysString(strCode);
 	u64 code = strCode >> 4;
 	int offset = strCode & 0xf;
 	auto csit = _strings.find(code);
-	if(csit == _strings.end())
+	if(csit == _strings.end() || csit->second.desc[offset].empty())
 		return unknown_string;
-	if(!csit->second.desc[offset].empty())
-		return csit->second.desc[offset].c_str();
-	return unknown_string;
+	return csit->second.desc[offset];
 }
-const wchar_t* DataManager::GetSysString(int code) {
+std::wstring DataManager::GetSysString(int code) {
 	if(code < 0 || code >= 2048)
 		return unknown_string;
 	auto csit = _sysStrings.find(code);
-	if(csit == _sysStrings.end())
+	if(csit == _sysStrings.end() || csit->second.empty())
 		return unknown_string;
-	return csit->second.c_str();
+	return csit->second;
 }
-const wchar_t* DataManager::GetVictoryString(int code) {
+std::wstring DataManager::GetVictoryString(int code) {
 	auto csit = _victoryStrings.find(code);
-	if(csit == _victoryStrings.end())
+	if(csit == _victoryStrings.end() || csit->second.empty())
 		return unknown_string;
-	return csit->second.c_str();
+	return csit->second;
 }
-const wchar_t* DataManager::GetCounterName(int code) {
+std::wstring DataManager::GetCounterName(int code) {
 	auto csit = _counterStrings.find(code);
-	if(csit == _counterStrings.end())
+	if(csit == _counterStrings.end() || csit->second.empty())
 		return unknown_string;
-	return csit->second.c_str();
+	return csit->second;
 }
-const wchar_t* DataManager::GetSetName(int code) {
+std::wstring DataManager::GetSetName(int code) {
 	auto csit = _setnameStrings.find(code);
-	if(csit == _setnameStrings.end())
-		return NULL;
-	return csit->second.c_str();
+	if(csit == _setnameStrings.end() || csit->second.empty())
+		return L"";
+	return csit->second;
 }
-unsigned int DataManager::GetSetCode(const wchar_t* setname) {
-	for(auto csit = _setnameStrings.begin(); csit != _setnameStrings.end(); ++csit) {
-		auto xpos = csit->second.find_first_of(L'|');//setname|extra info
-		if(csit->second.compare(0, xpos, setname) == 0)
-			return csit->first;
+std::vector<unsigned int> DataManager::GetSetCode(std::vector<std::wstring>& setname) {
+	std::vector<unsigned int> res;
+	for(auto& string : _setnameStrings) {
+		auto xpos = string.second.find_first_of(L'|');//setname|extra info
+		if(Game::CompareStrings(string.second.substr(0, xpos), setname, true))
+			res.push_back(string.first);
 	}
-	return 0;
+	return res;
 }
-const wchar_t* DataManager::GetNumString(int num, bool bracket) {
+std::wstring DataManager::GetNumString(int num, bool bracket) {
 	if(!bracket)
-		return numStrings[num];
-	wchar_t* p = numBuffer;
-	*p++ = L'(';
-	BufferIO::CopyWStrRef(numStrings[num], p, 4);
-	*p = L')';
-	*++p = 0;
-	return numBuffer;
+		return fmt::to_wstring(num);
+	return fmt::format(L"({})", num);
 }
-const wchar_t* DataManager::FormatLocation(int location, int sequence) {
+std::wstring DataManager::FormatLocation(int location, int sequence) {
 	if(location == 0x8) {
 		if(sequence < 5)
 			return GetSysString(1003);
@@ -221,93 +204,82 @@ const wchar_t* DataManager::FormatLocation(int location, int sequence) {
 	else
 		return unknown_string;
 }
-const wchar_t* DataManager::FormatAttribute(int attribute) {
-	wchar_t* p = attBuffer;
+std::wstring DataManager::FormatAttribute(int attribute) {
+	std::wstring res;
 	unsigned filter = 1;
 	int i = 1010;
 	for(; filter != 0x80; filter <<= 1, ++i) {
 		if(attribute & filter) {
-			BufferIO::CopyWStrRef(GetSysString(i), p, 16);
-			*p = L'|';
-			*++p = 0;
+			if(!res.empty())
+				res += L"|";
+			res += GetSysString(i);
 		}
 	}
-	if(p != attBuffer)
-		*(p - 1) = 0;
-	else
+	if(res.empty())
 		return unknown_string;
-	return attBuffer;
+	return res;
 }
-const wchar_t* DataManager::FormatRace(int race) {
-	wchar_t* p = racBuffer;
+std::wstring DataManager::FormatRace(int race) {
+	std::wstring res;
 	unsigned filter = 1;
 	int i = 1020;
 	for(; filter != 0x2000000; filter <<= 1, ++i) {
 		if(race & filter) {
-			BufferIO::CopyWStrRef(GetSysString(i), p, 16);
-			*p = L'|';
-			*++p = 0;
+			if(!res.empty())
+				res += L"|";
+			res += GetSysString(i);
 		}
 	}
-	if(p != racBuffer)
-		*(p - 1) = 0;
-	else
+	if(res.empty())
 		return unknown_string;
-	return racBuffer;
+	return res;
 }
-const wchar_t* DataManager::FormatType(int type) {
-	wchar_t* p = tpBuffer;
+std::wstring DataManager::FormatType(int type) {
+	std::wstring res;
 	unsigned filter = 1;
 	int i = 1050;
 	for(; filter != 0x8000000; filter <<= 1, ++i) {
 		if(type & filter) {
-			BufferIO::CopyWStrRef(GetSysString(i), p, 16);
-			*p = L'|';
-			*++p = 0;
+			if(!res.empty())
+				res += L"|";
+			res += GetSysString(i);
 		}
 	}
-	if(p != tpBuffer)
-		*(p - 1) = 0;
-	else
+	if(res.empty())
 		return unknown_string;
-	return tpBuffer;
+	return res;
 }
-const wchar_t* DataManager::FormatSetName(unsigned long long setcode) {
-	wchar_t* p = scBuffer;
+std::wstring DataManager::FormatSetName(unsigned long long setcode) {
+	std::wstring res;
 	for(int i = 0; i < 4; ++i) {
-		const wchar_t* setname = GetSetName((setcode >> i * 16) & 0xffff);
-		if(setname) {
-			BufferIO::CopyWStrRef(setname, p, 32);
-			*p = L'|';
-			*++p = 0;
-		}
+		auto name = GetSetName((setcode >> i * 16) & 0xffff);
+		if(!res.empty() && !name.empty())
+			res += L"|";
+		res += name;
 	}
-	if(p != scBuffer)
-		*(p - 1) = 0;
-	else
+	if(res.empty())
 		return unknown_string;
-	return scBuffer;
+	return res;
 }
-const wchar_t* DataManager::FormatLinkMarker(int link_marker) {
-	wchar_t* p = lmBuffer;
-	*p = 0;
+std::wstring DataManager::FormatLinkMarker(int link_marker) {
+	std::wstring res;
 	if(link_marker & LINK_MARKER_TOP_LEFT)
-		BufferIO::CopyWStrRef(L"[\u2196]", p, 4);
+		res+=L"[\u2196]";
 	if(link_marker & LINK_MARKER_TOP)
-		BufferIO::CopyWStrRef(L"[\u2191]", p, 4);
+		res += L"[\u2191]";
 	if(link_marker & LINK_MARKER_TOP_RIGHT)
-		BufferIO::CopyWStrRef(L"[\u2197]", p, 4);
+		res += L"[\u2197]";
 	if(link_marker & LINK_MARKER_LEFT)
-		BufferIO::CopyWStrRef(L"[\u2190]", p, 4);
+		res += L"[\u2190]";
 	if(link_marker & LINK_MARKER_RIGHT)
-		BufferIO::CopyWStrRef(L"[\u2192]", p, 4);
+		res += L"[\u2192]";
 	if(link_marker & LINK_MARKER_BOTTOM_LEFT)
-		BufferIO::CopyWStrRef(L"[\u2199]", p, 4);
+		res += L"[\u2199]";
 	if(link_marker & LINK_MARKER_BOTTOM)
-		BufferIO::CopyWStrRef(L"[\u2193]", p, 4);
+		res += L"[\u2193]";
 	if(link_marker & LINK_MARKER_BOTTOM_RIGHT)
-		BufferIO::CopyWStrRef(L"[\u2198]", p, 4);
-	return lmBuffer;
+		res += L"[\u2198]";
+	return res;
 }
 int DataManager::CardReader(int code, void* pData) {
 	if(!dataManager.GetData(code, (CardData*)pData))

@@ -6,15 +6,12 @@
 #include "replay_mode.h"
 #include "single_mode.h"
 #include "image_manager.h"
-#include "../ocgcore/duel.h"
 #include "game.h"
-#include "utils.h"
 
 namespace ygo {
 
 void UpdateDeck() {
-	BufferIO::CopyWStr(mainGame->cbDeckSelect->getItem(mainGame->cbDeckSelect->getSelected()),
-		mainGame->gameConf.lastdeck, 64);
+	mainGame->gameConf.lastdeck = mainGame->cbDeckSelect->getItem(mainGame->cbDeckSelect->getSelected());
 	char deckbuf[1024];
 	char* pdeck = deckbuf;
 	BufferIO::WriteInt32(pdeck, deckManager.current_deck.main.size() + deckManager.current_deck.extra.size());
@@ -36,6 +33,8 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 		s32 id = caller->getID();
 		if(mainGame->wRules->isVisible() && (id != BUTTON_RULE_OK && id != CHECKBOX_EXTRA_RULE))
 			break;
+		if(mainGame->wMessage->isVisible() && id != BUTTON_MSG_OK)
+			break;
 		if(mainGame->wCustomRules->isVisible() && id != BUTTON_CUSTOM_RULE_OK && (id < CHECKBOX_OBSOLETE || id > CHECKBOX_EMZONE))
 			break;
 		if(mainGame->wQuery->isVisible() && id != BUTTON_YES && id != BUTTON_NO) {
@@ -51,7 +50,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 			// Set cursor to an I-Beam if hovering over an edit box
 			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX && event.GUIEvent.Caller->isEnabled())
 			{
-				utils.changeCursor(ECI_IBEAM);
+				Utils::changeCursor(ECI_IBEAM);
 			}
 			break;
 		}
@@ -59,7 +58,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 			// Set cursor to normal if left an edit box
 			if (event.GUIEvent.Caller->getType() == EGUIET_EDIT_BOX && event.GUIEvent.Caller->isEnabled())
 			{
-				utils.changeCursor(ECI_NORMAL);
+				Utils::changeCursor(ECI_NORMAL);
 			}
 			break;
 		}
@@ -70,7 +69,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				break;
 			}
 			case BUTTON_LAN_MODE: {
-				mainGame->btnCreateHost->setEnabled(true);
+				mainGame->btnCreateHost->setEnabled(mainGame->coreloaded);
 				mainGame->btnJoinHost->setEnabled(true);
 				mainGame->btnJoinCancel->setEnabled(true);
 				mainGame->HideElement(mainGame->wMainMenu);
@@ -96,9 +95,9 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
 					int status = evutil_getaddrinfo(hostname, port, &hints, &answer);
 					if(status != 0) {
-						mainGame->gMutex.Lock();
-						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1412));
-						mainGame->gMutex.Unlock();
+						mainGame->gMutex.lock();
+						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1412).c_str());
+						mainGame->gMutex.unlock();
 						break;
 					} else {
 						sockaddr_in * sin = ((struct sockaddr_in *)answer->ai_addr);
@@ -106,9 +105,9 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 						remote_addr = htonl(inet_addr(ip));
 					}
 				}
-				unsigned int remote_port = _wtoi(mainGame->ebJoinPort->getText());
-				BufferIO::CopyWStr(pstr, mainGame->gameConf.lasthost, 100);
-				BufferIO::CopyWStr(mainGame->ebJoinPort->getText(), mainGame->gameConf.lastport, 20);
+				unsigned int remote_port = std::stoi(mainGame->ebJoinPort->getText());
+				mainGame->gameConf.lasthost = pstr;
+				mainGame->gameConf.lastport = mainGame->ebJoinPort->getText();
 				if(DuelClient::StartClient(remote_addr, remote_port, false)) {
 					mainGame->btnCreateHost->setEnabled(false);
 					mainGame->btnJoinHost->setEnabled(false);
@@ -183,9 +182,9 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				break;
 			}
 			case BUTTON_HOST_CONFIRM: {
-				unsigned int host_port = _wtoi(mainGame->ebHostPort->getText());
-				BufferIO::CopyWStr(mainGame->ebServerName->getText(), mainGame->gameConf.gamename, 20);
-				BufferIO::CopyWStr(mainGame->ebHostPort->getText(), mainGame->gameConf.serverport, 20);
+				unsigned int host_port = std::stoi(mainGame->ebHostPort->getText());
+				mainGame->gameConf.gamename = mainGame->ebServerName->getText();
+				mainGame->gameConf.serverport = mainGame->ebHostPort->getText();
 				if(!NetServer::StartServer(host_port))
 					break;
 				if(!DuelClient::StartClient(0x7f000001, host_port)) {
@@ -197,7 +196,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				break;
 			}
 			case BUTTON_HOST_CANCEL: {
-				mainGame->btnCreateHost->setEnabled(true);
+				mainGame->btnCreateHost->setEnabled(mainGame->coreloaded);
 				mainGame->btnJoinHost->setEnabled(true);
 				mainGame->btnJoinCancel->setEnabled(true);
 				if(mainGame->wRules->isVisible())
@@ -257,7 +256,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 			}
 			case BUTTON_HP_CANCEL: {
 				DuelClient::StopClient();
-				mainGame->btnCreateHost->setEnabled(true);
+				mainGame->btnCreateHost->setEnabled(mainGame->coreloaded);
 				mainGame->btnJoinHost->setEnabled(true);
 				mainGame->btnJoinCancel->setEnabled(true);
 				mainGame->HideElement(mainGame->wHostPrepare);
@@ -290,22 +289,15 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				} else {
 					if(mainGame->lstReplayList->getSelected() == -1)
 						break;
-					if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(mainGame->lstReplayList->getSelected())))
+					if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(mainGame->lstReplayList->getSelected(), true)))
 						break;
 				}
 				if(mainGame->chkYrp->isChecked() && !ReplayMode::cur_replay.LoadYrp())
 					break;
-				mainGame->imgCard->setImage(imageManager.tCover[0]);
+				mainGame->ClearCardInfo();
 				mainGame->wCardImg->setVisible(true);
 				mainGame->wInfos->setVisible(true);
 				mainGame->wReplay->setVisible(true);
-				mainGame->stName->setText(L"");
-				mainGame->stInfo->setText(L"");
-				mainGame->stDataInfo->setText(L"");
-				mainGame->stSetName->setText(L"");
-				mainGame->stText->setText(L"");
-				mainGame->showingcard = 0;
-				mainGame->scrCardText->setVisible(false);
 				mainGame->wReplayControl->setVisible(true);
 				mainGame->btnReplayStart->setVisible(false);
 				mainGame->btnReplayPause->setVisible(true);
@@ -325,12 +317,10 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				int sel = mainGame->lstReplayList->getSelected();
 				if(sel == -1)
 					break;
-				mainGame->gMutex.Lock();
-				wchar_t textBuffer[256];
-				myswprintf(textBuffer, L"%ls\n%ls", mainGame->lstReplayList->getListItem(sel), dataManager.GetSysString(1363));
-				mainGame->SetStaticText(mainGame->stQMessage, 310, mainGame->textFont, (wchar_t*)textBuffer);
+				mainGame->gMutex.lock();
+				mainGame->stQMessage->setText(fmt::format(L"{}\n{}", mainGame->lstReplayList->getListItem(sel), dataManager.GetSysString(1363)).c_str());
 				mainGame->PopupElement(mainGame->wQuery);
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 				prev_operation = id;
 				prev_sel = sel;
 				break;
@@ -339,11 +329,11 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				int sel = mainGame->lstReplayList->getSelected();
 				if(sel == -1)
 					break;
-				mainGame->gMutex.Lock();
-				mainGame->wReplaySave->setText(dataManager.GetSysString(1364));
+				mainGame->gMutex.lock();
+				mainGame->wReplaySave->setText(dataManager.GetSysString(1364).c_str());
 				mainGame->ebRSName->setText(mainGame->lstReplayList->getListItem(sel));
 				mainGame->PopupElement(mainGame->wReplaySave);
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 				prev_operation = id;
 				prev_sel = sel;
 				break;
@@ -369,20 +359,17 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				mainGame->RefreshDeck(mainGame->cbDBDecks);
 				if(open_file && deckManager.LoadDeck(open_file_name)) {
 #ifdef WIN32
-					wchar_t *dash = wcsrchr(open_file_name, L'\\');
+					auto dash = open_file_name.find_last_of(L"\\");
 #else
-					wchar_t *dash = wcsrchr(open_file_name, L'/');
+					auto dash = open_file_name.find_last_of(L"/");
 #endif
-					wchar_t *dot = wcsrchr(open_file_name, L'.');
-					if(dash && dot) {
-						wchar_t deck_name[256];
-						wcsncpy(deck_name, dash + 1, dot - dash - 1);
-						deck_name[dot - dash - 1] = L'\0';
-						mainGame->ebDeckname->setText(deck_name);
+					auto dot = open_file_name.find_last_of(L".");
+					if(dash != std::wstring::npos && dot != std::wstring::npos) {
+						mainGame->ebDeckname->setText(open_file_name.substr(dash + 1, dot - dash - 1).c_str());
 						mainGame->cbDBDecks->setSelected(-1);
 					} else {
 						for(size_t i = 0; i < mainGame->cbDBDecks->getItemCount(); ++i) {
-							if(!wcscmp(mainGame->cbDBDecks->getItem(i), open_file_name)) {
+							if(mainGame->cbDBDecks->getItem(i) == open_file_name) {
 								mainGame->cbDBDecks->setSelected(i);
 								break;
 							}
@@ -395,6 +382,10 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 				}
 				mainGame->HideElement(mainGame->wMainMenu);
 				mainGame->deckBuilder.Initialize();
+				break;
+			}
+			case BUTTON_MSG_OK: {
+				mainGame->HideElement(mainGame->wMessage);
 				break;
 			}
 			case BUTTON_YES: {
@@ -418,15 +409,15 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 			case BUTTON_REPLAY_SAVE: {
 				mainGame->HideElement(mainGame->wReplaySave);
 				if(prev_operation == BUTTON_RENAME_REPLAY) {
-					wchar_t newname[256];
-					BufferIO::CopyWStr(mainGame->ebRSName->getText(), newname, 256);
-					if(mywcsncasecmp(newname + wcslen(newname) - 4, L".yrp", 4)) {
-						myswprintf(newname, L"%ls.yrp", mainGame->ebRSName->getText());
-					}
-					if(Replay::RenameReplay(mainGame->lstReplayList->getListItem(prev_sel), newname)) {
-						mainGame->lstReplayList->setItem(prev_sel, newname, -1);
+					std::wstring newname(mainGame->ebRSName->getText());
+					newname = newname.substr(0, newname.find_last_of(L"."));
+					std::wstring oldname(mainGame->lstReplayList->getListItem(prev_sel));
+					auto oldextension = oldname.substr(oldname.find_last_of(L"."));
+					newname += oldextension;
+					if(Replay::RenameReplay(oldname, newname)) {
+						mainGame->lstReplayList->setItem(prev_sel, newname.c_str(), -1);
 					} else {
-						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1365));
+						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1365).c_str());
 					}
 				}
 				prev_operation = 0;
@@ -450,25 +441,20 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					break;
 				int addr = DuelClient::hosts[sel].ipaddr;
 				int port = DuelClient::hosts[sel].port;
-				wchar_t buf[20];
-				myswprintf(buf, L"%d.%d.%d.%d", addr & 0xff, (addr >> 8) & 0xff, (addr >> 16) & 0xff, (addr >> 24) & 0xff);
-				mainGame->ebJoinHost->setText(buf);
-				myswprintf(buf, L"%d", port);
-				mainGame->ebJoinPort->setText(buf);
+				mainGame->ebJoinHost->setText(fmt::format(L"{}.{}.{}.{}", addr & 0xff, (addr >> 8) & 0xff, (addr >> 16) & 0xff, (addr >> 24) & 0xff).c_str());
+				mainGame->ebJoinPort->setText(fmt::to_wstring(port).c_str());
 				break;
 			}
 			case LISTBOX_REPLAY_LIST: {
 				int sel = mainGame->lstReplayList->getSelected();
-				if(sel == -1)
+				if(sel == -1 || sel == 0)
 					break;
-				if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(sel)))
+				if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(sel, true)))
 					break;
-				wchar_t infobuf[256];
 				std::wstring repinfo;
 				time_t curtime = ReplayMode::cur_replay.pheader.seed;
 				tm* st = localtime(&curtime);
-				myswprintf(infobuf, L"%d/%d/%d %02d:%02d:%02d\n", st->tm_year + 1900, st->tm_mon + 1, st->tm_mday, st->tm_hour, st->tm_min, st->tm_sec);
-				repinfo.append(infobuf);
+				repinfo.append(fmt::format(L"{}/{}/{} {:02}:{:02}:{:02}\n", st->tm_year + 1900, st->tm_mon + 1, st->tm_mday, st->tm_hour, st->tm_min, st->tm_sec).c_str());
 				wchar_t namebuf[6][20];
 				ReplayMode::cur_replay.ReadName(namebuf[0]);
 				ReplayMode::cur_replay.ReadName(namebuf[1]);
@@ -481,31 +467,108 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 					ReplayMode::cur_replay.ReadName(namebuf[5]);
 				}
 				if(ReplayMode::cur_replay.pheader.flag & REPLAY_TAG)
-					myswprintf(infobuf, L"%ls\n%ls\n===VS===\n%ls\n%ls\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3]);
+					repinfo.append(fmt::format(L"{}\n{}\n===VS===\n{}\n{}\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3]));
 				else if (ReplayMode::cur_replay.pheader.flag & REPLAY_RELAY)
-					myswprintf(infobuf, L"%ls\n%ls\n%ls\n===VS===\n%ls\n%ls\n%ls\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3], namebuf[4], namebuf[5]);
+					repinfo.append(fmt::format(L"{}\n{}\n{}\n===VS===\n{}\n{}\n{}\n", namebuf[0], namebuf[1], namebuf[2], namebuf[3], namebuf[4], namebuf[5]));
 				else
-					myswprintf(infobuf, L"%ls\n===VS===\n%ls\n", namebuf[0], namebuf[1]);
-				repinfo.append(infobuf);
+					repinfo.append(fmt::format(L"{}\n===VS===\n{}\n", namebuf[0], namebuf[1]));
 				mainGame->ebRepStartTurn->setText(L"1");
-				mainGame->SetStaticText(mainGame->stReplayInfo, 180, mainGame->guiFont, (wchar_t*)repinfo.c_str());
+				mainGame->stReplayInfo->setText((wchar_t*)repinfo.c_str());
 				if(ReplayMode::cur_replay.pheader.id == 0x31707279) {
 					mainGame->chkYrp->setChecked(false);
 					mainGame->chkYrp->setEnabled(false);
 				} else
-					mainGame->chkYrp->setEnabled(true);
+					mainGame->chkYrp->setEnabled(mainGame->coreloaded);
 				break;
 			}
 			case LISTBOX_SINGLEPLAY_LIST: {
 				int sel = mainGame->lstSinglePlayList->getSelected();
-				if(sel == -1)
+				if(sel == -1 || sel == 0)
 					break;
-				const wchar_t* name = mainGame->lstSinglePlayList->getListItem(mainGame->lstSinglePlayList->getSelected());
-				wchar_t fname[256];
-				char filename[256];
-				myswprintf(fname, L"./single/%ls", name);
-				BufferIO::EncodeUTF8(fname, filename);
-				mainGame->stSinglePlayInfo->setText(mainGame->ReadPuzzleMessage(filename).c_str());
+				const wchar_t* name = mainGame->lstSinglePlayList->getListItem(mainGame->lstSinglePlayList->getSelected(), true);
+				mainGame->stSinglePlayInfo->setText(mainGame->ReadPuzzleMessage(name).c_str());
+				break;
+			}
+			}
+			break;
+		}
+		case irr::gui::EGET_LISTBOX_SELECTED_AGAIN: {
+			switch(id) {
+			case LISTBOX_LAN_HOST: {
+				char ip[20];
+				const wchar_t* pstr = mainGame->ebJoinHost->getText();
+				BufferIO::CopyWStr(pstr, ip, 16);
+				unsigned int remote_addr = htonl(inet_addr(ip));
+				if(remote_addr == -1) {
+					char hostname[100];
+					char port[6];
+					BufferIO::CopyWStr(pstr, hostname, 100);
+					BufferIO::CopyWStr(mainGame->ebJoinPort->getText(), port, 6);
+					struct evutil_addrinfo hints;
+					struct evutil_addrinfo *answer = NULL;
+					memset(&hints, 0, sizeof(hints));
+					hints.ai_family = AF_INET;
+					hints.ai_socktype = SOCK_STREAM;
+					hints.ai_protocol = IPPROTO_TCP;
+					hints.ai_flags = EVUTIL_AI_ADDRCONFIG;
+					int status = evutil_getaddrinfo(hostname, port, &hints, &answer);
+					if(status != 0) {
+						mainGame->gMutex.lock();
+						mainGame->env->addMessageBox(L"", dataManager.GetSysString(1412).c_str());
+						mainGame->gMutex.unlock();
+						break;
+					} else {
+						sockaddr_in * sin = ((struct sockaddr_in *)answer->ai_addr);
+						evutil_inet_ntop(AF_INET, &(sin->sin_addr), ip, 20);
+						remote_addr = htonl(inet_addr(ip));
+					}
+				}
+				unsigned int remote_port = std::stoi(mainGame->ebJoinPort->getText());
+				mainGame->gameConf.lasthost = pstr;
+				mainGame->gameConf.lastport = mainGame->ebJoinPort->getText();
+				if(DuelClient::StartClient(remote_addr, remote_port, false)) {
+					mainGame->btnCreateHost->setEnabled(false);
+					mainGame->btnJoinHost->setEnabled(false);
+					mainGame->btnJoinCancel->setEnabled(false);
+				}
+				break;
+			}
+			case LISTBOX_REPLAY_LIST: {
+				if(open_file) {
+					ReplayMode::cur_replay.OpenReplay(open_file_name);
+					open_file = false;
+				} else {
+					if(mainGame->lstReplayList->getSelected() == -1 || mainGame->lstReplayList->getSelected() == 0)
+						break;
+					if(!ReplayMode::cur_replay.OpenReplay(mainGame->lstReplayList->getListItem(mainGame->lstReplayList->getSelected(),true)))
+						break;
+				}
+				if(mainGame->chkYrp->isChecked() && !ReplayMode::cur_replay.LoadYrp())
+					break;
+				mainGame->ClearCardInfo();
+				mainGame->wCardImg->setVisible(true);
+				mainGame->wInfos->setVisible(true);
+				mainGame->wReplay->setVisible(true);
+				mainGame->wReplayControl->setVisible(true);
+				mainGame->btnReplayStart->setVisible(false);
+				mainGame->btnReplayPause->setVisible(true);
+				mainGame->btnReplayStep->setVisible(false);
+				mainGame->btnReplayUndo->setVisible(false);
+				mainGame->wPhase->setVisible(true);
+				mainGame->dField.Clear();
+				mainGame->HideElement(mainGame->wReplay);
+				mainGame->device->setEventReceiver(&mainGame->dField);
+				unsigned int start_turn = _wtoi(mainGame->ebRepStartTurn->getText());
+				if(start_turn == 1)
+					start_turn = 0;
+				ReplayMode::StartReplay(start_turn);
+				break;
+			}
+			case LISTBOX_SINGLEPLAY_LIST: {
+				if(!open_file && (mainGame->lstSinglePlayList->getSelected() == -1 || mainGame->lstSinglePlayList->getSelected() == 0))
+					break;
+				mainGame->singleSignal.SetNoWait(false);
+				SingleMode::StartPlay();
 				break;
 			}
 			}
@@ -660,7 +723,7 @@ bool MenuHandler::OnEvent(const irr::SEvent& event) {
 		}
 		case irr::KEY_F12: {
 			if (!event.KeyInput.PressedDown)
-				utils.takeScreenshot(mainGame->device);
+				Utils::takeScreenshot(mainGame->device);
 			return true;
 			break;
 		}

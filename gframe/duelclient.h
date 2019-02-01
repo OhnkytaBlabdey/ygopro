@@ -12,7 +12,7 @@
 #include "network.h"
 #include "data_manager.h"
 #include "deck_manager.h"
-#include "../ocgcore/mtrandom.h"
+#include <random>
 #include "replay.h"
 
 namespace ygo {
@@ -31,9 +31,9 @@ private:
 	static char duel_client_write[0x2000];
 	static bool is_closing;
 	static u64 select_hint;
-	static wchar_t event_string[256];
-	static mtrandom rnd;
+	static std::wstring event_string;
 public:
+	static std::mt19937 rnd;
 	static unsigned int temp_ip;
 	static unsigned short temp_port;
 	static unsigned short temp_ver;
@@ -44,7 +44,7 @@ public:
 	static void StopClient(bool is_exiting = false);
 	static void ClientRead(bufferevent* bev, void* ctx);
 	static void ClientEvent(bufferevent *bev, short events, void *ctx);
-	static int ClientThread(void* param);
+	static int ClientThread();
 	static void HandleSTOCPacketLan(char* data, unsigned int len);
 	static std::vector<ReplayPacket> replay_stream;
 	static Replay last_replay;
@@ -74,6 +74,8 @@ public:
 		memcpy(p, buffer, len);
 		bufferevent_write(client_bev, duel_client_write, len + 3);
 	}
+
+	static void ReplayPrompt(bool need_header = false);
 	
 protected:
 	static bool is_refreshing;
@@ -83,7 +85,7 @@ protected:
 public:
 	static std::vector<HostPacket> hosts;
 	static void BeginRefreshHost();
-	static int RefreshThread(void* arg);
+	static int RefreshThread(event_base* broadev);
 	static void BroadcastReply(evutil_socket_t fd, short events, void* arg);
 };
 

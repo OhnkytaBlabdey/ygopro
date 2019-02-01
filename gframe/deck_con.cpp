@@ -6,6 +6,7 @@
 #include "game.h"
 #include "duelclient.h"
 #include <algorithm>
+#include <unordered_map>
 
 namespace ygo {
 
@@ -40,39 +41,44 @@ static int parse_filter(const wchar_t* pstr, unsigned int* type) {
 	return 0;
 }
 
-static bool check_set_code(const CardDataC& data, int set_code) {
-	unsigned long long sc = data.setcode;
+static bool check_set_code(const CardDataC& data, std::vector<unsigned int>& setcodes) {
+	if(setcodes.empty())
+		return false;
+	unsigned long long card_setcode = data.setcode;
 	if (data.alias) {
 		auto aptr = dataManager._datas.find(data.alias);
 		if (aptr != dataManager._datas.end())
-			sc = aptr->second.setcode;
+			card_setcode = aptr->second.setcode;
 	}
-	bool res = false;
-	int settype = set_code & 0xfff;
-	int setsubtype = set_code & 0xf000;
-	while (sc) {
-		if ((sc & 0xfff) == settype && (sc & 0xf000 & setsubtype) == setsubtype)
-			res = true;
-		sc = sc >> 16;
+	for(auto& set_code : setcodes) {
+		auto sc = card_setcode;
+		int settype = set_code & 0xfff;
+		int setsubtype = set_code & 0xf000;
+		while(sc) {
+			if((sc & 0xfff) == settype && (sc & 0xf000 & setsubtype) == setsubtype)
+				return true;
+			sc = sc >> 16;
+		}
 	}
-	return res;
+	return false;
 }
 
 void DeckBuilder::Initialize() {
 	mainGame->is_building = true;
 	mainGame->is_siding = false;
+	mainGame->ClearCardInfo();
 	mainGame->wInfos->setVisible(true);
 	mainGame->wCardImg->setVisible(true);
 	mainGame->wDeckEdit->setVisible(true);
 	mainGame->wFilter->setVisible(true);
 	mainGame->wSort->setVisible(true);
 	mainGame->btnLeaveGame->setVisible(true);
-	mainGame->btnLeaveGame->setText(dataManager.GetSysString(1306));
+	mainGame->btnLeaveGame->setText(dataManager.GetSysString(1306).c_str());
 	mainGame->btnSideOK->setVisible(false);
 	mainGame->btnSideShuffle->setVisible(false);
 	mainGame->btnSideSort->setVisible(false);
 	mainGame->btnSideReload->setVisible(false);
-	filterList = deckManager._lfList[0].content;
+	filterList = &deckManager._lfList[0];
 	mainGame->cbDBLFList->setSelected(0);
 	ClearSearch();
 	mouse_pos.set(0, 0);
@@ -83,10 +89,12 @@ void DeckBuilder::Initialize() {
 	is_draging = false;
 	prev_deck = mainGame->cbDBDecks->getSelected();
 	prev_operation = 0;
+	scroll_pos = 0;
 	mainGame->device->setEventReceiver(this);
 }
 void DeckBuilder::Terminate() {
 	mainGame->is_building = false;
+	mainGame->ClearCardInfo();
 	mainGame->wDeckEdit->setVisible(false);
 	mainGame->wCategories->setVisible(false);
 	mainGame->wFilter->setVisible(false);
@@ -98,17 +106,11 @@ void DeckBuilder::Terminate() {
 	mainGame->device->setEventReceiver(&mainGame->menuHandler);
 	mainGame->wACMessage->setVisible(false);
 	mainGame->ClearTextures();
-	mainGame->stName->setText(L"");
-	mainGame->stInfo->setText(L"");
-	mainGame->stDataInfo->setText(L"");
-	mainGame->stSetName->setText(L"");
-	mainGame->stText->setText(L"");
-	mainGame->showingcard = 0;
-	mainGame->scrCardText->setVisible(false);
+	mainGame->ClearCardInfo(0);
 	mainGame->scrFilter->setVisible(false);
 	int sel = mainGame->cbDBDecks->getSelected();
 	if(sel >= 0)
-		BufferIO::CopyWStr(mainGame->cbDBDecks->getItem(sel), mainGame->gameConf.lastdeck, 64);
+		mainGame->gameConf.lastdeck = mainGame->cbDBDecks->getItem(sel);
 	if(exit_on_return)
 		mainGame->device->closeDevice();
 }
@@ -146,7 +148,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			case BUTTON_SAVE_DECK: {
 				int sel = mainGame->cbDBDecks->getSelected();
 				if(sel >= 0 && deckManager.SaveDeck(deckManager.current_deck, mainGame->cbDBDecks->getItem(sel))) {
-					mainGame->stACMessage->setText(dataManager.GetSysString(1335));
+					mainGame->stACMessage->setText(dataManager.GetSysString(1335).c_str());
 					mainGame->PopupElement(mainGame->wACMessage, 20);
 				}
 				break;
@@ -169,7 +171,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					mainGame->cbDBDecks->setSelected(mainGame->cbDBDecks->getItemCount() - 1);
 				}
 				if(deckManager.SaveDeck(deckManager.current_deck, dname)) {
-					mainGame->stACMessage->setText(dataManager.GetSysString(1335));
+					mainGame->stACMessage->setText(dataManager.GetSysString(1335).c_str());
 					mainGame->PopupElement(mainGame->wACMessage, 20);
 				}
 				break;
@@ -178,12 +180,10 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				int sel = mainGame->cbDBDecks->getSelected();
 				if(sel == -1)
 					break;
-				mainGame->gMutex.Lock();
-				wchar_t textBuffer[256];
-				myswprintf(textBuffer, L"%ls\n%ls", mainGame->cbDBDecks->getItem(sel), dataManager.GetSysString(1337));
-				mainGame->SetStaticText(mainGame->stQMessage, 310, mainGame->textFont, (wchar_t*)textBuffer);
+				mainGame->gMutex.lock();
+				mainGame->stQMessage->setText(fmt::format(L"{}\n{}", mainGame->cbDBDecks->getItem(sel), dataManager.GetSysString(1337)).c_str());
 				mainGame->PopupElement(mainGame->wQuery);
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 				prev_operation = id;
 				break;
 			}
@@ -215,17 +215,10 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			case BUTTON_SIDE_OK: {
 				if(deckManager.current_deck.main.size() != deckManager.pre_deck.main.size() || deckManager.current_deck.extra.size() != deckManager.pre_deck.extra.size()
 				        || deckManager.current_deck.side.size() != deckManager.pre_deck.side.size()) {
-					mainGame->env->addMessageBox(L"", dataManager.GetSysString(1410));
+					mainGame->env->addMessageBox(L"", dataManager.GetSysString(1410).c_str());
 					break;
 				}
-				mainGame->imgCard->setImage(imageManager.tCover[0]);
-				mainGame->stName->setText(L"");
-				mainGame->stInfo->setText(L"");
-				mainGame->stDataInfo->setText(L"");
-				mainGame->stSetName->setText(L"");
-				mainGame->stText->setText(L"");
-				mainGame->showingcard = 0;
-				mainGame->scrCardText->setVisible(false);
+				mainGame->ClearCardInfo();
 				char deckbuf[1024];
 				char* pdeck = deckbuf;
 				BufferIO::WriteInt32(pdeck, deckManager.current_deck.main.size() + deckManager.current_deck.extra.size());
@@ -262,7 +255,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 						mainGame->cbDBDecks->setSelected(sel);
 						if(sel != -1)
 							deckManager.LoadDeck(mainGame->cbDBDecks->getItem(sel));
-						mainGame->stACMessage->setText(dataManager.GetSysString(1338));
+						mainGame->stACMessage->setText(dataManager.GetSysString(1338).c_str());
 						mainGame->PopupElement(mainGame->wACMessage, 20);
 						prev_deck = sel;
 					}
@@ -307,7 +300,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				if (mainGame->btnMark[7]->isPressed())
 					filter_marks |= 0004;
 				mainGame->HideElement(mainGame->wLinkMarks);
-				StartFilter();
+				StartFilter(true);
 				break;
 			}
 			}
@@ -325,14 +318,14 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 		case irr::gui::EGET_EDITBOX_CHANGED: {
 			switch (id) {
 			case EDITBOX_KEYWORD: {
-				stringw filter = mainGame->ebCardName->getText();
+				std::wstring filter = mainGame->ebCardName->getText();
 				if (filter.size() > 2) {
 					StartFilter();
 				}
 				break;
 			}
 			case EDITBOX_DECK_NAME: {
-				mainGame->ValidateName(mainGame->ebDeckname);
+				mainGame->ValidateName(event.GUIEvent.Caller);
 				break;
 			}
 			}
@@ -341,7 +334,8 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 		case irr::gui::EGET_COMBO_BOX_CHANGED: {
 			switch(id) {
 			case COMBOBOX_DBLFLIST: {
-				filterList = deckManager._lfList[mainGame->cbDBLFList->getSelected()].content;
+				filterList = &deckManager._lfList[mainGame->cbDBLFList->getSelected()];
+				StartFilter(true);
 				break;
 			}
 			case COMBOBOX_DBDECKS: {
@@ -372,9 +366,6 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					break;
 				}
 				case 1: {
-					wchar_t normaltuner[32];
-					wchar_t normalpen[32];
-					wchar_t syntuner[32];
 					mainGame->cbCardType2->setEnabled(true);
 					mainGame->cbRace->setEnabled(true);
 					mainGame->cbAttribute->setEnabled(true);
@@ -383,28 +374,25 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					mainGame->ebStar->setEnabled(true);
 					mainGame->ebScale->setEnabled(true);
 					mainGame->cbCardType2->clear();
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080), 0);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054), TYPE_MONSTER + TYPE_NORMAL);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1055), TYPE_MONSTER + TYPE_EFFECT);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1056), TYPE_MONSTER + TYPE_FUSION);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1057), TYPE_MONSTER + TYPE_RITUAL);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1063), TYPE_MONSTER + TYPE_SYNCHRO);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1073), TYPE_MONSTER + TYPE_XYZ);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1074), TYPE_MONSTER + TYPE_PENDULUM);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1076), TYPE_MONSTER + TYPE_LINK);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1075), TYPE_MONSTER + TYPE_SPSUMMON);
-					myswprintf(normaltuner, L"%ls|%ls", dataManager.GetSysString(1054), dataManager.GetSysString(1062));
-					mainGame->cbCardType2->addItem(normaltuner, TYPE_MONSTER + TYPE_NORMAL + TYPE_TUNER);
-					myswprintf(normalpen, L"%ls|%ls", dataManager.GetSysString(1054), dataManager.GetSysString(1074));
-					mainGame->cbCardType2->addItem(normalpen, TYPE_MONSTER + TYPE_NORMAL + TYPE_PENDULUM);
-					myswprintf(syntuner, L"%ls|%ls", dataManager.GetSysString(1063), dataManager.GetSysString(1062));
-					mainGame->cbCardType2->addItem(syntuner, TYPE_MONSTER + TYPE_SYNCHRO + TYPE_TUNER);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1062), TYPE_MONSTER + TYPE_TUNER);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1061), TYPE_MONSTER + TYPE_DUAL);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1060), TYPE_MONSTER + TYPE_UNION);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1059), TYPE_MONSTER + TYPE_SPIRIT);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1071), TYPE_MONSTER + TYPE_FLIP);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1072), TYPE_MONSTER + TYPE_TOON);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080).c_str(), 0);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054).c_str(), TYPE_MONSTER + TYPE_NORMAL);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1055).c_str(), TYPE_MONSTER + TYPE_EFFECT);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1056).c_str(), TYPE_MONSTER + TYPE_FUSION);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1057).c_str(), TYPE_MONSTER + TYPE_RITUAL);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1063).c_str(), TYPE_MONSTER + TYPE_SYNCHRO);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1073).c_str(), TYPE_MONSTER + TYPE_XYZ);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1074).c_str(), TYPE_MONSTER + TYPE_PENDULUM);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1076).c_str(), TYPE_MONSTER + TYPE_LINK);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1075).c_str(), TYPE_MONSTER + TYPE_SPSUMMON);
+					mainGame->cbCardType2->addItem((dataManager.GetSysString(1054) + L"|" + dataManager.GetSysString(1062)).c_str(), TYPE_MONSTER + TYPE_NORMAL + TYPE_TUNER);
+					mainGame->cbCardType2->addItem((dataManager.GetSysString(1054) + L"|" + dataManager.GetSysString(1074)).c_str(), TYPE_MONSTER + TYPE_NORMAL + TYPE_PENDULUM);
+					mainGame->cbCardType2->addItem((dataManager.GetSysString(1063) + L"|" + dataManager.GetSysString(1062)).c_str(), TYPE_MONSTER + TYPE_SYNCHRO + TYPE_TUNER);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1062).c_str(), TYPE_MONSTER + TYPE_TUNER);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1061).c_str(), TYPE_MONSTER + TYPE_DUAL);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1060).c_str(), TYPE_MONSTER + TYPE_UNION);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1059).c_str(), TYPE_MONSTER + TYPE_SPIRIT);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1071).c_str(), TYPE_MONSTER + TYPE_FLIP);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1072).c_str(), TYPE_MONSTER + TYPE_TOON);
 					break;
 				}
 				case 2: {
@@ -416,13 +404,14 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					mainGame->ebStar->setEnabled(false);
 					mainGame->ebScale->setEnabled(false);
 					mainGame->cbCardType2->clear();
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080), 0);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054), TYPE_SPELL);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1066), TYPE_SPELL + TYPE_QUICKPLAY);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1067), TYPE_SPELL + TYPE_CONTINUOUS);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1057), TYPE_SPELL + TYPE_RITUAL);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1068), TYPE_SPELL + TYPE_EQUIP);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1069), TYPE_SPELL + TYPE_FIELD);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080).c_str(), 0);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054).c_str(), TYPE_SPELL);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1066).c_str(), TYPE_SPELL + TYPE_QUICKPLAY);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1067).c_str(), TYPE_SPELL + TYPE_CONTINUOUS);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1057).c_str(), TYPE_SPELL + TYPE_RITUAL);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1068).c_str(), TYPE_SPELL + TYPE_EQUIP);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1069).c_str(), TYPE_SPELL + TYPE_FIELD);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1076).c_str(), TYPE_SPELL + TYPE_LINK);
 					break;
 				}
 				case 3: {
@@ -434,14 +423,14 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 					mainGame->ebStar->setEnabled(false);
 					mainGame->ebScale->setEnabled(false);
 					mainGame->cbCardType2->clear();
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080), 0);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054), TYPE_TRAP);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1067), TYPE_TRAP + TYPE_CONTINUOUS);
-					mainGame->cbCardType2->addItem(dataManager.GetSysString(1070), TYPE_TRAP + TYPE_COUNTER);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1080).c_str(), 0);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1054).c_str(), TYPE_TRAP);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1067).c_str(), TYPE_TRAP + TYPE_CONTINUOUS);
+					mainGame->cbCardType2->addItem(dataManager.GetSysString(1070).c_str(), TYPE_TRAP + TYPE_COUNTER);
 					break;
 				}
 				}
-				StartFilter();
+				StartFilter(true);
 				break;
 			}
 			case COMBOBOX_SECONDTYPE:
@@ -454,7 +443,7 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 						mainGame->ebDefense->setEnabled(true);
 					}
 				}
-				StartFilter();
+				StartFilter(true);
 				break; 
 			}
 			case COMBOBOX_SORTTYPE: {
@@ -465,27 +454,37 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			}
 			break;
 		}
+		case irr::gui::EGET_SCROLL_BAR_CHANGED: {
+			switch(id) {
+				case SCROLL_FILTER: {
+					GetHoveredCard();
+					break;
+				}
+			}
+			break;
+		}
 		case irr::gui::EGET_CHECKBOX_CHANGED: {
 			switch (id) {
 				case CHECKBOX_SHOW_ANIME: {
 					int prevLimit = mainGame->cbLimit->getSelected();
 					mainGame->cbLimit->clear();
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1310));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1316));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1317));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1318));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1240));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1241));
-					mainGame->cbLimit->addItem(dataManager.GetSysString(1242));
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1310).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1316).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1317).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1318).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1320).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1240).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1241).c_str());
+					mainGame->cbLimit->addItem(dataManager.GetSysString(1242).c_str());
 					if(mainGame->chkAnime->isChecked()) {
-						mainGame->cbLimit->addItem(dataManager.GetSysString(1243));
+						mainGame->cbLimit->addItem(dataManager.GetSysString(1243).c_str());
 						mainGame->cbLimit->addItem(L"Illegal");
 						mainGame->cbLimit->addItem(L"VG");
 						mainGame->cbLimit->addItem(L"Custom");
 					}
 					if (prevLimit < 8)
 						mainGame->cbLimit->setSelected(prevLimit);
-					StartFilter();
+					StartFilter(true);
 					break;
 				}
 			}
@@ -527,8 +526,11 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 			break;
 		}
 		case irr::EMIE_LMOUSE_LEFT_UP: {
-			if(!is_draging)
+			if(!is_draging) {
+				mouse_pos.set(event.MouseInput.X, event.MouseInput.Y);
+				GetHoveredCard();
 				break;
+			}
 			bool pushed = false;
 			if(hovered_pos == 1)
 				pushed = push_main(draging_pointer, hovered_seq);
@@ -648,10 +650,10 @@ bool DeckBuilder::OnEvent(const irr::SEvent& event) {
 				break;
 			if(event.MouseInput.Wheel < 0) {
 				if(mainGame->scrFilter->getPos() < mainGame->scrFilter->getMax())
-					mainGame->scrFilter->setPos(mainGame->scrFilter->getPos() + 1);
+					mainGame->scrFilter->setPos(mainGame->scrFilter->getPos() + DECK_SEARCH_SCROLL_STEP);
 			} else {
 				if(mainGame->scrFilter->getPos() > 0)
-					mainGame->scrFilter->setPos(mainGame->scrFilter->getPos() - 1);
+					mainGame->scrFilter->setPos(mainGame->scrFilter->getPos() - DECK_SEARCH_SCROLL_STEP);
 			}
 			GetHoveredCard();
 			break;
@@ -728,9 +730,10 @@ void DeckBuilder::GetHoveredCard() {
 			}
 		}
 	} else if(x >= 810 && x <= 995 && y >= 165 && y <= 626) {
+		const int offset = (mainGame->scrFilter->getPos() % DECK_SEARCH_SCROLL_STEP) * -1.f * 0.65f;
 		hovered_pos = 4;
-		hovered_seq = (y - 165) / 66;
-		int pos = mainGame->scrFilter->getPos() + hovered_seq;
+		hovered_seq = (y - 165 - offset) / 66;
+		int pos = floor(mainGame->scrFilter->getPos() / DECK_SEARCH_SCROLL_STEP) + hovered_seq;
 		if(pos >= (int)results.size()) {
 			hovered_seq = -1;
 			hovered_code = 0;
@@ -745,14 +748,36 @@ void DeckBuilder::GetHoveredCard() {
 	if(!is_draging && pre_code != hovered_code) {
 		if(hovered_code)
 			mainGame->ShowCardInfo(hovered_code);
-		if(pre_code)
-			imageManager.RemoveTexture(pre_code);
 	}
 }
-void DeckBuilder::StartFilter() {
+bool DeckBuilder::FiltersChanged() {
+	bool res = false;
+#define LF(x) if(x != prev_##x) {\
+	res = true;\
+	}\
+	prev_##x = x;
+	LF(filter_effect)
+		LF(filter_type)
+		LF(filter_type2)
+		LF(filter_attrib)
+		LF(filter_race)
+		LF(filter_atktype)
+		LF(filter_atk)
+		LF(filter_deftype)
+		LF(filter_def)
+		LF(filter_lvtype)
+		LF(filter_lv)
+		LF(filter_scltype)
+		LF(filter_scl)
+		LF(filter_marks)
+		LF(filter_lm)
+#undef LF
+		return res;
+}
+void DeckBuilder::StartFilter(bool force_refresh) {
 	filter_type = mainGame->cbCardType->getSelected();
 	filter_type2 = mainGame->cbCardType2->getItemData(mainGame->cbCardType2->getSelected());
-	filter_lm = mainGame->cbLimit->getSelected();
+	filter_lm = static_cast<limitation_search_filters>(mainGame->cbLimit->getSelected());
 	if(filter_type == 1) {
 		filter_attrib = mainGame->cbAttribute->getItemData(mainGame->cbAttribute->getSelected());
 		filter_race = mainGame->cbRace->getItemData(mainGame->cbRace->getSelected());
@@ -761,168 +786,182 @@ void DeckBuilder::StartFilter() {
 		filter_lv = parse_filter(mainGame->ebStar->getText(), &filter_lvtype);
 		filter_scl = parse_filter(mainGame->ebScale->getText(), &filter_scltype);
 	}
-	FilterCards();
+	FilterCards(force_refresh);
 }
-void DeckBuilder::FilterCards() {
+void DeckBuilder::FilterCards(bool force_refresh) {
 	results.clear();
-	const wchar_t* pstr = mainGame->ebCardName->getText();
-	int trycode = BufferIO::GetVal(pstr);
-	if(dataManager.GetData(trycode, 0)) {
-		auto ptr = dataManager.GetCodePointer(trycode);	// verified by GetData()
-		results.push_back(ptr);
-		mainGame->scrFilter->setVisible(false);
-		mainGame->scrFilter->setPos(0);
-		myswprintf(result_string, L"%d", results.size());
-		return;
+	std::wstring searchterm(mainGame->ebCardName->getText());
+	std::vector<std::wstring> searchterms;
+	if(searchterm.empty())
+		searchterms.push_back(searchterm);
+	else {
+		std::transform(searchterm.begin(), searchterm.end(), searchterm.begin(), ::toupper);
+		searchterms = Game::tokenize(searchterm, L"+");
 	}
-	unsigned int set_code = 0;
-	if (pstr[0] == L'@')
-		set_code = dataManager.GetSetCode(&pstr[1]);
-	else
-		set_code = dataManager.GetSetCode(&pstr[0]);
-	if (pstr[0] == 0 || (pstr[0] == L'$' && pstr[1] == 0) || (pstr[0] == L'@' && pstr[1] == 0))
-		pstr = 0;
-	auto strpointer = dataManager._strings.begin();
-	for(code_pointer ptr = dataManager._datas.begin(); ptr != dataManager._datas.end(); ++ptr, ++strpointer) {
-		const CardDataC& data = ptr->second;
-		const CardString& text = strpointer->second;
-		if(data.type & TYPE_TOKEN || (data.ot > 3 && !mainGame->chkAnime->isChecked()))
+	if(FiltersChanged() || force_refresh)
+		searched_terms.clear();
+	//removes no longer existing search terms from the cache
+	for(auto it = searched_terms.cbegin(); it != searched_terms.cend();) {
+		if(std::find(searchterms.begin(), searchterms.end(), (*it).first) == searchterms.end())
+			it = searched_terms.erase(it);
+		else
+			++it;
+	}
+	//removes search terms already cached
+	for(auto it = searchterms.cbegin(); it != searchterms.cend();) {
+		if(searched_terms.count((*it)))
+			it = searchterms.erase(it);
+		else
+			it++;
+	}
+	for(auto term : searchterms) {
+		std::vector<code_pointer> result;
+		searched_terms[term] = result;
+		int trycode = BufferIO::GetVal(term.c_str());
+		if(trycode && dataManager.GetData(trycode, 0)) {
+			auto ptr = dataManager.GetCodePointer(trycode);	// verified by GetData()
+			searched_terms[term].push_back(ptr);
 			continue;
-		switch(filter_type) {
-		case 1: {
-			if(!(data.type & TYPE_MONSTER) || (data.type & filter_type2) != filter_type2)
-				continue;
-			if(filter_race && data.race != filter_race)
-				continue;
-			if(filter_attrib && data.attribute != filter_attrib)
-				continue;
-			if(filter_atktype) {
-				if((filter_atktype == 1 && data.attack != filter_atk) || (filter_atktype == 2 && data.attack < filter_atk)
-				        || (filter_atktype == 3 && data.attack <= filter_atk) || (filter_atktype == 4 && (data.attack > filter_atk || data.attack < 0))
-				        || (filter_atktype == 5 && (data.attack >= filter_atk || data.attack < 0)) || (filter_atktype == 6 && data.attack != -2))
-					continue;
-			}
-			if(filter_deftype) {
-				if((filter_deftype == 1 && data.defense != filter_def) || (filter_deftype == 2 && data.defense < filter_def)
-				        || (filter_deftype == 3 && data.defense <= filter_def) || (filter_deftype == 4 && (data.defense > filter_def || data.defense < 0))
-				        || (filter_deftype == 5 && (data.defense >= filter_def || data.defense < 0)) || (filter_deftype == 6 && data.defense != -2)
-				        || (data.type & TYPE_LINK))
-					continue;
-			}
-			if(filter_lvtype) {
-				if((filter_lvtype == 1 && data.level != filter_lv) || (filter_lvtype == 2 && data.level < filter_lv)
-				        || (filter_lvtype == 3 && data.level <= filter_lv) || (filter_lvtype == 4 && data.level > filter_lv)
-				        || (filter_lvtype == 5 && data.level >= filter_lv) || filter_lvtype == 6)
-					continue;
-			}
-			if(filter_scltype) {
-				if((filter_scltype == 1 && data.lscale != filter_scl) || (filter_scltype == 2 && data.lscale < filter_scl)
-				        || (filter_scltype == 3 && data.lscale <= filter_scl) || (filter_scltype == 4 && (data.lscale > filter_scl || data.lscale == 0))
-				        || (filter_scltype == 5 && (data.lscale >= filter_scl || data.lscale == 0)) || filter_scltype == 6
-						|| !(data.type & TYPE_PENDULUM))
-					continue;
-			}
-			break;
 		}
-		case 2: {
-			if(!(data.type & TYPE_SPELL))
-				continue;
-			if(filter_type2 && data.type != filter_type2)
-				continue;
-			break;
-		}
-		case 3: {
-			if(!(data.type & TYPE_TRAP))
-				continue;
-			if(filter_type2 && data.type != filter_type2)
-				continue;
-			break;
-		}
-		}
-		if(filter_effect && !(data.category & filter_effect))
-			continue;
-		if(filter_marks && (data.link_marker & filter_marks)!= filter_marks)
-			continue;
-		if(filter_lm) {
-			if(filter_lm <= 3 && (!filterList->count(ptr->first) || (*filterList)[ptr->first] != filter_lm - 1))
-				continue;
-			if(filter_lm == 4 && data.ot != 1)
-				continue;
-			if(filter_lm == 5 && data.ot != 2)
-				continue;
-			if(filter_lm == 6 && data.ot != 3)
-				continue;
-			if(filter_lm == 7 && data.ot != 4)
-				continue;
-			if(filter_lm == 8 && data.ot != 8)
-				continue;
-			if(filter_lm == 9 && data.ot != 16)
-				continue;
-			if(filter_lm == 10 && data.ot != 32)
-				continue;
-		}
-		if(pstr) {
-			if(pstr[0] == L'$') {
-				if(!CardNameCompare(text.name.c_str(), &pstr[1]))
-					continue;
-			} else if(pstr[0] == L'@' && set_code) {
-				if(!check_set_code(data, set_code))
-					continue;
+		std::vector<unsigned int> set_code;
+		std::vector<std::wstring> tokens;
+		if(!term.empty()) {
+			if(term[0] == L'@' || term[0] == L'$') {
+				if(term.size() > 1)
+					tokens = Game::tokenize(&term[1], L"*");
 			} else {
-				if(!CardNameCompare(text.name.c_str(), pstr) && !(CardNameCompare(text.text.c_str(), pstr))
-					&& (!set_code || !check_set_code(data, set_code)))
-					continue;
+				tokens = Game::tokenize(term, L"*");
 			}
 		}
-		results.push_back(ptr);
+		if(tokens.empty())
+			tokens.push_back(L"");
+		set_code = dataManager.GetSetCode(tokens);
+		auto strpointer = dataManager._strings.begin();
+		wchar_t checkterm = term.size() ? term[0] : 0;
+		for(code_pointer ptr = dataManager._datas.begin(); ptr != dataManager._datas.end(); ptr++, strpointer++) {
+			if(CheckCard(ptr->second, strpointer->second, checkterm, tokens, set_code))
+				result.push_back(ptr);
+		}
+		if(result.size())
+			searched_terms[term] = result;
 	}
-	myswprintf(result_string, L"%d", results.size());
-	if(results.size() > 7) {
-		mainGame->scrFilter->setVisible(true);
-		mainGame->scrFilter->setMax(results.size() - 7);
-		mainGame->scrFilter->setPos(0);
-	} else {
-		mainGame->scrFilter->setVisible(false);
-		mainGame->scrFilter->setPos(0);
+	for(auto& res : searched_terms) {
+		results.insert(results.end(), res.second.begin(), res.second.end());
 	}
 	SortList();
-}
-bool DeckBuilder::CardNameCompare(const wchar_t *sa, const wchar_t *sb) {
-	if(!sa || !sb || (wcslen(sb) > wcslen(sa)))
-		return false;
-	int i = 0, j = 0, k;
-	wchar_t ca, cb, pwc, wc = L'*';
-	bool wcr = false;
-	while(sa[i]) {
-		ca = towupper(sa[i]);
-		cb = towupper(sb[j]);
-		if(ca == cb) {
-			j++;
-			if(!sb[j])
-				return true;
-		} else if(cb == wc) {
-			while(sb[j] == wc) {
-				j++;
-				if(!sb[j])
-					return true;
-			}
-			k = j;
-			pwc = towupper(sb[j]);
-			wcr = true;
-			while(towupper(sa[i]) != pwc) {
-				i++;
-				if(!sa[i])
-					return false;
-			}
-			i--;
-		} else if(wcr && ca == pwc) {
-			j = k;
-			i--;
-		} else
-			j = 0;
-		i++;
+	auto ip = std::unique(results.begin(), results.end());
+	results.resize(std::distance(results.begin(), ip));
+	result_string = fmt::to_wstring(results.size());
+	if(results.size() > 7) {
+		scroll_pos = 0;
+		mainGame->scrFilter->setVisible(true);
+		mainGame->scrFilter->setMax((results.size() - 7) * DECK_SEARCH_SCROLL_STEP);
+		mainGame->scrFilter->setPos(0);
+	} else {
+		scroll_pos = 0;
+		mainGame->scrFilter->setVisible(false);
+		mainGame->scrFilter->setPos(0);
 	}
-	return false;
+}
+bool DeckBuilder::CheckCard(const CardDataC& data, const CardString& text, const wchar_t& checkchar, std::vector<std::wstring>& tokens, std::vector<unsigned int>& set_code) {
+	if(data.type & TYPE_TOKEN || (data.ot > 3 && !mainGame->chkAnime->isChecked()))
+		return false;
+	switch(filter_type) {
+	case 1: {
+		if(!(data.type & TYPE_MONSTER) || (data.type & filter_type2) != filter_type2)
+			return false;
+		if(filter_race && data.race != filter_race)
+			return false;
+		if(filter_attrib && data.attribute != filter_attrib)
+			return false;
+		if(filter_atktype) {
+			if((filter_atktype == 1 && data.attack != filter_atk) || (filter_atktype == 2 && data.attack < filter_atk)
+				|| (filter_atktype == 3 && data.attack <= filter_atk) || (filter_atktype == 4 && (data.attack > filter_atk || data.attack < 0))
+				|| (filter_atktype == 5 && (data.attack >= filter_atk || data.attack < 0)) || (filter_atktype == 6 && data.attack != -2))
+				return false;
+		}
+		if(filter_deftype) {
+			if((filter_deftype == 1 && data.defense != filter_def) || (filter_deftype == 2 && data.defense < filter_def)
+				|| (filter_deftype == 3 && data.defense <= filter_def) || (filter_deftype == 4 && (data.defense > filter_def || data.defense < 0))
+				|| (filter_deftype == 5 && (data.defense >= filter_def || data.defense < 0)) || (filter_deftype == 6 && data.defense != -2)
+				|| (data.type & TYPE_LINK))
+				return false;
+		}
+		if(filter_lvtype) {
+			if((filter_lvtype == 1 && data.level != filter_lv) || (filter_lvtype == 2 && data.level < filter_lv)
+				|| (filter_lvtype == 3 && data.level <= filter_lv) || (filter_lvtype == 4 && data.level > filter_lv)
+				|| (filter_lvtype == 5 && data.level >= filter_lv) || filter_lvtype == 6)
+				return false;
+		}
+		if(filter_scltype) {
+			if((filter_scltype == 1 && data.lscale != filter_scl) || (filter_scltype == 2 && data.lscale < filter_scl)
+				|| (filter_scltype == 3 && data.lscale <= filter_scl) || (filter_scltype == 4 && (data.lscale > filter_scl || data.lscale == 0))
+				|| (filter_scltype == 5 && (data.lscale >= filter_scl || data.lscale == 0)) || filter_scltype == 6
+				|| !(data.type & TYPE_PENDULUM))
+				return false;
+		}
+		break;
+	}
+	case 2: {
+		if(!(data.type & TYPE_SPELL))
+			return false;
+		if(filter_type2 && data.type != filter_type2)
+			return false;
+		break;
+	}
+	case 3: {
+		if(!(data.type & TYPE_TRAP))
+			return false;
+		if(filter_type2 && data.type != filter_type2)
+			return false;
+		break;
+	}
+	}
+	if(filter_effect && !(data.category & filter_effect))
+		return false;
+	if(filter_marks && (data.link_marker & filter_marks) != filter_marks)
+		return false;
+	if(filter_lm) {
+		unsigned int limitcode = data.code;
+		auto flit = filterList->content.find(limitcode);
+		if(flit == filterList->content.end())
+			limitcode = data.alias ? data.alias : data.code;
+		if(filter_lm <= LIMITATION_FILTER_SEMI_LIMITED && ((!filterList->content.count(limitcode) && !filterList->whitelist) || (filterList->content[limitcode] != filter_lm - 1)))
+			return false;
+		if(filter_lm == LIMITATION_FILTER_UNLIMITED) {
+			if(filterList->whitelist) {
+				if(!filterList->content.count(limitcode) || filterList->content[limitcode] < 3)
+					return false;
+			} else if(filterList->content.count(limitcode) && filterList->content[limitcode] < 3)
+				return false;
+		}
+		if(filter_lm == LIMITATION_FILTER_OCG && data.ot != 0x1)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_TCG && data.ot != 0x2)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_TCG_OCG && data.ot != 0x3)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_ANIME && data.ot != 0x4)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_ILLEGAL && data.ot != 0x8)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_VIDEOGAME && data.ot != 0x10)
+			return false;
+		if(filter_lm == LIMITATION_FILTER_CUSTOM && data.ot != 0x20)
+			return false;
+	}
+	if(tokens.size()) {
+		if(checkchar == L'$') {
+			return Game::CompareStrings(text.name, tokens, true);
+		} else if(checkchar == L'@') {
+			return check_set_code(data, set_code);
+		} else {
+			if(!Game::CompareStrings(text.name, tokens, true) && !(Game::CompareStrings(text.text, tokens, true))
+				&& (!set_code.size() || !check_set_code(data, set_code)))
+				return false;
+		}
+	}
+	return true;
 }
 void DeckBuilder::ClearSearch() {
 	mainGame->cbCardType->setSelected(0);
@@ -935,9 +974,10 @@ void DeckBuilder::ClearSearch() {
 	mainGame->ebStar->setEnabled(false);
 	mainGame->ebScale->setEnabled(false);
 	mainGame->ebCardName->setText(L"");
+	searched_terms.clear();
 	ClearFilter();
 	results.clear();
-	myswprintf(result_string, L"%d", 0);
+	result_string = L"0";
 }
 void DeckBuilder::ClearFilter() {
 	mainGame->cbAttribute->setSelected(0);
@@ -958,7 +998,7 @@ void DeckBuilder::SortList() {
 	auto left = results.begin();
 	const wchar_t* pstr = mainGame->ebCardName->getText();
 	for(auto it = results.begin(); it != results.end(); ++it) {
-		if(wcscmp(pstr, dataManager.GetName((*it)->first)) == 0) {
+		if(wcscmp(pstr, dataManager.GetName((*it)->first).c_str()) == 0) {
 			std::iter_swap(left, it);
 			++left;
 		}
@@ -979,7 +1019,7 @@ void DeckBuilder::SortList() {
 	}
 }
 bool DeckBuilder::push_main(code_pointer pointer, int seq) {
-	if(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK))
+	if(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK) && pointer->second.type != (TYPE_SPELL | TYPE_LINK))
 		return false;
 	auto& container = deckManager.current_deck.main;
 	if(!mainGame->is_siding && (int)container.size() >= 60)
@@ -992,7 +1032,7 @@ bool DeckBuilder::push_main(code_pointer pointer, int seq) {
 	return true;
 }
 bool DeckBuilder::push_extra(code_pointer pointer, int seq) {
-	if(!(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK)))
+	if(!(pointer->second.type & (TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK)) || pointer->second.type == (TYPE_SPELL | TYPE_LINK))
 		return false;
 	auto& container = deckManager.current_deck.extra;
 	if(!mainGame->is_siding && (int)container.size() >= 15)
@@ -1032,22 +1072,34 @@ void DeckBuilder::pop_side(int seq) {
 }
 bool DeckBuilder::check_limit(code_pointer pointer) {
 	unsigned int limitcode = pointer->second.alias ? pointer->second.alias : pointer->first;
+	int found = 0;
+	std::unordered_set<int> limit_codes;
+	auto f=[&](int code, int alias){
+		if(filterList->content.find(code) != filterList->content.end())
+			limit_codes.insert(code);
+		else
+			limit_codes.insert(alias);
+	};
+	auto f2 = [&](std::vector<code_pointer>& list) {
+		for(auto& it : list) {
+			if(it->first == limitcode || it->second.alias == limitcode) {
+				f(it->first, it->second.alias);
+				found++;
+			}
+		}
+	};
+	f(pointer->first, limitcode);
+	f2(deckManager.current_deck.main);
+	f2(deckManager.current_deck.extra);
+	f2(deckManager.current_deck.side);
 	int limit = 3;
-	auto flit = filterList->find(limitcode);
-	if(flit != filterList->end())
-		limit = flit->second;
-	for(auto it = deckManager.current_deck.main.begin(); it != deckManager.current_deck.main.end(); ++it) {
-		if((*it)->first == limitcode || (*it)->second.alias == limitcode)
-			limit--;
+	for(int code : limit_codes) {
+		auto flit = filterList->content.find(code);
+		if(flit != filterList->content.end())
+			limit = std::min(limit,flit->second);
 	}
-	for(auto it = deckManager.current_deck.extra.begin(); it != deckManager.current_deck.extra.end(); ++it) {
-		if((*it)->first == limitcode || (*it)->second.alias == limitcode)
-			limit--;
-	}
-	for(auto it = deckManager.current_deck.side.begin(); it != deckManager.current_deck.side.end(); ++it) {
-		if((*it)->first == limitcode || (*it)->second.alias == limitcode)
-			limit--;
-	}
-	return limit > 0;
+	if(limit_codes.empty() && filterList->whitelist)
+		limit = 0;
+	return limit > found;
 }
 }

@@ -10,8 +10,8 @@ event_base* NetServer::net_evbase = 0;
 event* NetServer::broadcast_ev = 0;
 evconnlistener* NetServer::listener = 0;
 DuelMode* NetServer::duel_mode = 0;
-char NetServer::net_server_read[0x2000];
-char NetServer::net_server_write[0x2000];
+char NetServer::net_server_read[0x20000];
+char NetServer::net_server_write[0x20000];
 unsigned short NetServer::last_sent = 0;
 
 bool NetServer::StartServer(unsigned short port) {
@@ -34,7 +34,7 @@ bool NetServer::StartServer(unsigned short port) {
 		return false;
 	}
 	evconnlistener_set_error_cb(listener, ServerAcceptError);
-	Thread::NewThread(ServerThread, net_evbase);
+	std::thread(ServerThread).detach();
 	return true;
 }
 bool NetServer::StartBroadcast() {
@@ -137,7 +137,7 @@ void NetServer::ServerEchoEvent(bufferevent* bev, short events, void* ctx) {
 		else DisconnectPlayer(dp);
 	}
 }
-int NetServer::ServerThread(void* param) {
+int NetServer::ServerThread() {
 	event_base_dispatch(net_evbase);
 	for(auto bit = users.begin(); bit != users.end(); ++bit) {
 		bufferevent_disable(bit->first, EV_READ);

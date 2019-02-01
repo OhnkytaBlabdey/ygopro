@@ -10,8 +10,9 @@ namespace ygo {
 
 struct LFList {
 	unsigned int hash;
-	wchar_t listName[20];
-	std::unordered_map<int, int>* content;
+	std::wstring listName;
+	std::unordered_map<int, int> content;
+	bool whitelist;
 };
 struct Deck {
 	std::vector<code_pointer> main;
@@ -36,17 +37,18 @@ public:
 	Deck pre_deck;
 	std::vector<LFList> _lfList;
 
+	void LoadLFListSingle(const char* path);
 	void LoadLFList();
-	wchar_t* GetLFListName(int lfhash);
+	std::wstring GetLFListName(int lfhash);
 	int CheckDeck(Deck& deck, int lfhash, bool allow_ocg, bool allow_tcg, bool doubled, int forbiddentypes = 0);
 	int TypeCount(std::vector<code_pointer> cards, int type);
-	int LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec, int mainc2 = 0, int sidec2 = 0, bool doubled = false);
+	int LoadDeck(Deck& deck, int* dbuf, int mainc, int sidec, int mainc2 = 0, int sidec2 = 0);
+	int LoadDeck(Deck& deck, std::vector<int> mainlist, std::vector<int> sidelist);
 	bool LoadSide(Deck& deck, int* dbuf, int mainc, int sidec);
-	FILE* OpenDeckFile(const wchar_t * file, const char * mode);
-	bool LoadDeck(const wchar_t* file);
-	bool LoadDeckDouble(const wchar_t* file, const wchar_t* file2);
-	bool SaveDeck(Deck& deck, const wchar_t* name);
-	bool DeleteDeck(Deck& deck, const wchar_t* name);
+	bool LoadDeck(const std::wstring& file, Deck* deck = nullptr);
+	bool LoadDeckDouble(const std::wstring& file, const std::wstring& file2, Deck* deck = nullptr);
+	bool SaveDeck(Deck& deck, const std::wstring& name);
+	bool DeleteDeck(Deck& deck, const std::wstring& name);
 };
 
 extern DeckManager deckManager;

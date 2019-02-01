@@ -18,7 +18,7 @@ ClientCard::ClientCard() {
 	is_showtarget = false;
 	is_showchaintarget = false;
 	is_highlighting = false;
-	is_disabled = false;
+	status = 0;
 	is_reversed = false;
 	cmdFlag = 0;
 	code = 0;
@@ -41,13 +41,13 @@ ClientCard::ClientCard() {
 	position = 0;
 	cHint = 0;
 	chValue = 0;
-	atkstring[0] = 0;
-	defstring[0] = 0;
-	lvstring[0] = 0;
-	linkstring[0] = 0;
-	rkstring[0] = 0;
-	rscstring[0] = 0;
-	lscstring[0] = 0;
+	atkstring = L"";
+	defstring = L"";
+	lvstring = L"";
+	linkstring = L"";
+	rkstring = L"";
+	rscstring = L"";
+	lscstring = L"";
 	overlayTarget = 0;
 	equipTarget = 0;
 }
@@ -89,14 +89,14 @@ void ClientCard::UpdateInfo(char* buf) {
 		pdata = BufferIO::ReadInt32(buf);
 		if(level != (unsigned int)pdata) {
 			level = pdata;
-			myswprintf(lvstring, L"L%d", level);
+			lvstring = fmt::format(L"L{}",level);
 		}
 	}
 	if(flag & QUERY_RANK) {
 		pdata = BufferIO::ReadInt32(buf);
 		if(rank != (unsigned int)pdata) {
 			rank = pdata;
-			myswprintf(rkstring, L"R%d", rank);
+			rkstring = fmt::format(L"R{}", level);
 		}
 	}
 	if(flag & QUERY_ATTRIBUTE)
@@ -106,21 +106,18 @@ void ClientCard::UpdateInfo(char* buf) {
 	if(flag & QUERY_ATTACK) {
 		attack = BufferIO::ReadInt32(buf);
 		if(attack < 0) {
-			atkstring[0] = '?';
-			atkstring[1] = 0;
+			atkstring = L"?";
 		} else
-			myswprintf(atkstring, L"%d", attack);
+			atkstring = fmt::to_wstring(attack);
 	}
 	if(flag & QUERY_DEFENSE) {
 		defense = BufferIO::ReadInt32(buf);
 		if(type & TYPE_LINK) {
-			defstring[0] = '-';
-			defstring[1] = 0;
+			defstring = L"-";
 		} else if(defense < 0) {
-			defstring[0] = '?';
-			defstring[1] = 0;
+			defstring = L"?";
 		} else
-			myswprintf(defstring, L"%d", defense);
+			defstring = fmt::to_wstring(defense);
 	}
 	if(flag & QUERY_BASE_ATTACK)
 		base_attack = BufferIO::ReadInt32(buf);
@@ -128,23 +125,19 @@ void ClientCard::UpdateInfo(char* buf) {
 		base_defense = BufferIO::ReadInt32(buf);
 	if(flag & QUERY_REASON)
 		reason = BufferIO::ReadInt32(buf);
+	if(flag & QUERY_REASON_CARD)
+		buf += 10;
 	if(flag & QUERY_EQUIP_CARD) {
-		int c = BufferIO::ReadInt8(buf);
-		int l = BufferIO::ReadInt8(buf);
-		int s = BufferIO::ReadInt8(buf);
-		BufferIO::ReadInt8(buf);
-		ClientCard* ecard = mainGame->dField.GetCard(c, l, s);
+		loc_info info = read_location_info(buf);
+		ClientCard* ecard = mainGame->dField.GetCard(mainGame->LocalPlayer(info.controler), info.location, info.sequence);
 		equipTarget = ecard;
 		ecard->equipped.insert(this);
 	}
 	if(flag & QUERY_TARGET_CARD) {
 		int count = BufferIO::ReadInt32(buf);
 		for(int i = 0; i < count; ++i) {
-			int c = BufferIO::ReadInt8(buf);
-			int l = BufferIO::ReadInt8(buf);
-			int s = BufferIO::ReadInt8(buf);
-			BufferIO::ReadInt8(buf);
-			ClientCard* tcard = mainGame->dField.GetCard(c, l, s);
+			loc_info info = read_location_info(buf);
+			ClientCard* tcard = mainGame->dField.GetCard(mainGame->LocalPlayer(info.controler), info.location, info.sequence);
 			cardTarget.insert(tcard);
 			tcard->ownerTarget.insert(this);
 		}
@@ -165,23 +158,21 @@ void ClientCard::UpdateInfo(char* buf) {
 	}
 	if(flag & QUERY_OWNER)
 		owner = BufferIO::ReadInt32(buf);
-	if(flag & QUERY_IS_DISABLED)
-		is_disabled = BufferIO::ReadInt32(buf);
-	if(flag & QUERY_IS_PUBLIC)
-		is_public = BufferIO::ReadInt32(buf);
+	if(flag & QUERY_STATUS)
+		status = BufferIO::ReadInt32(buf);
 	if(flag & QUERY_LSCALE) {
 		lscale = BufferIO::ReadInt32(buf);
-		myswprintf(lscstring, L"%d", lscale);
+		lscstring = fmt::to_wstring(lscale);
 	}
 	if(flag & QUERY_RSCALE) {
 		rscale = BufferIO::ReadInt32(buf);
-		myswprintf(rscstring, L"%d", rscale);
+		rscstring = fmt::to_wstring(rscale);
 	}
 	if(flag & QUERY_LINK) {
 		pdata = BufferIO::ReadInt32(buf);
 		if (link != (unsigned int)pdata) {
 			link = pdata;
-			myswprintf(linkstring, L"L%d", link);
+			linkstring = fmt::format(L"L{}", link);
 		}
 		pdata = BufferIO::ReadInt32(buf);
 		if (link_marker != (unsigned int)pdata) {
@@ -201,6 +192,19 @@ void ClientCard::ClearTarget() {
 	cardTarget.clear();
 	ownerTarget.clear();
 }
+loc_info ClientCard::read_location_info(char*& p) {
+	loc_info info;
+	info.controler = BufferIO::ReadInt8(p);
+	info.location = BufferIO::ReadInt8(p);
+	if (mainGame->dInfo.lua64) {
+		info.sequence = BufferIO::ReadInt32(p);
+		info.position = BufferIO::ReadInt32(p);
+	} else {
+		info.sequence = BufferIO::ReadInt8(p);
+		info.position = BufferIO::ReadInt8(p);
+	}
+	return info;
+}
 bool ClientCard::client_card_sort(ClientCard* c1, ClientCard* c2) {
 	int32 cp1 = c1->overlayTarget ? c1->overlayTarget->controler : c1->controler;
 	int32 cp2 = c2->overlayTarget ? c2->overlayTarget->controler : c2->controler;
@@ -213,8 +217,14 @@ bool ClientCard::client_card_sort(ClientCard* c1, ClientCard* c2) {
 			return c1->overlayTarget->sequence < c2->overlayTarget->sequence;
 		else return c1->sequence < c2->sequence;
 	else {
-		if(c1->location & 0x71)
+		if(c1->location & (LOCATION_DECK | LOCATION_GRAVE | LOCATION_REMOVED | LOCATION_EXTRA)) {
+			for(size_t i = 0; i < mainGame->dField.chains.size(); ++i) {
+				auto chit = mainGame->dField.chains[i];
+				if(c1 == chit.chain_card || chit.target.find(c1) != chit.target.end())
+					return true;
+			}
 			return c1->sequence > c2->sequence;
+		}
 		else
 			return c1->sequence < c2->sequence;
 	}
@@ -280,9 +290,7 @@ bool ClientCard::deck_sort_def(code_pointer p1, code_pointer p2) {
 	return p1->first < p2->first;
 }
 bool ClientCard::deck_sort_name(code_pointer p1, code_pointer p2) {
-	const wchar_t* name1 = dataManager.GetName(p1->first);
-	const wchar_t* name2 = dataManager.GetName(p2->first);
-	int res = wcscmp(name1, name2);
+	int res = dataManager.GetName(p1->first).compare(dataManager.GetName(p2->first));
 	if(res != 0)
 		return res < 0;
 	return p1->first < p2->first;

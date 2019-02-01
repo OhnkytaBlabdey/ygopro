@@ -18,8 +18,8 @@ private:
 	static event* broadcast_ev;
 	static evconnlistener* listener;
 	static DuelMode* duel_mode;
-	static char net_server_read[0x2000];
-	static char net_server_write[0x2000];
+	static char net_server_read[0x20000];
+	static char net_server_write[0x20000];
 	static unsigned short last_sent;
 
 public:
@@ -33,7 +33,7 @@ public:
 	static void ServerAcceptError(evconnlistener *listener, void* ctx);
 	static void ServerEchoRead(bufferevent* bev, void* ctx);
 	static void ServerEchoEvent(bufferevent* bev, short events, void* ctx);
-	static int ServerThread(void* param);
+	static int ServerThread();
 	static void DisconnectPlayer(DuelPlayer* dp);
 	static void HandleCTOSPacket(DuelPlayer* dp, char* data, unsigned int len);
 	static void SendPacketToPlayer(DuelPlayer* dp, unsigned char proto) {

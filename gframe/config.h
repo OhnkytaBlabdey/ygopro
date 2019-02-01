@@ -1,10 +1,6 @@
 #ifndef __CONFIG_H
 #define __CONFIG_H
 
-#pragma once
-
-#define _IRR_STATIC_LIB_
-#define IRR_COMPILE_WITH_DX9_DEV_PACK
 #ifdef _WIN32
 
 #include <WinSock2.h>
@@ -12,11 +8,9 @@
 #include <ws2tcpip.h>
 
 #ifdef _MSC_VER
-#define myswprintf _swprintf
 #define mywcsncasecmp _wcsnicmp
 #define mystrncasecmp _strnicmp
 #else
-#define myswprintf swprintf
 #define mywcsncasecmp wcsncasecmp
 #define mystrncasecmp strncasecmp
 #endif
@@ -43,8 +37,7 @@
 #define SOCKADDR sockaddr
 #define SOCKET_ERRNO() (errno)
 
-#include <wchar.h>
-#define myswprintf(buf, fmt, ...) swprintf(buf, 4096, fmt, ##__VA_ARGS__)
+#include <cwchar>
 #define mywcsncasecmp wcsncasecmp
 #define mystrncasecmp strncasecmp
 inline int _wtoi(const wchar_t * s) {
@@ -52,6 +45,11 @@ inline int _wtoi(const wchar_t * s) {
 	return (int)wcstol(s, &endptr, 10);
 }
 #endif
+
+template<size_t N, typename... TR>
+inline int myswprintf(wchar_t(&buf)[N], const wchar_t* fmt, TR... args) {
+	return swprintf(buf, N, fmt, args...);
+}
 
 #include <irrlicht.h>
 #include <irrKlang.h>
@@ -64,12 +62,24 @@ inline int _wtoi(const wchar_t * s) {
 #include <stdlib.h>
 #include <memory.h>
 #include <time.h>
+#include <set>
+#include <map>
+#include <unordered_set>
+#include <unordered_map>
+#include <algorithm>
 #include "bufferio.h"
-#include "mymutex.h"
+#include <mutex>
 #include "mysignal.h"
-#include "mythread.h"
-#include "../ocgcore/ocgapi.h"
-#include "../ocgcore/common.h"
+#include <thread>
+#ifndef YGOPRO_BUILD_DLL
+#include <ocgapi.h>
+#else
+#include "dllinterface.h"
+#endif
+#include <common.h>
+#include <fmt/format.h>
+#include <fmt/printf.h>
+#include "utils.h"
 
 using namespace irr;
 using namespace core;
@@ -82,6 +92,6 @@ extern unsigned short PRO_VERSION;
 extern int enable_log;
 extern bool exit_on_return;
 extern bool open_file;
-extern wchar_t open_file_name[256];
+extern std::wstring open_file_name;
 
 #endif

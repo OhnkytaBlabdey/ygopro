@@ -2,8 +2,6 @@
 #include "duelclient.h"
 #include "game.h"
 #include "single_mode.h"
-#include "../ocgcore/common.h"
-#include "../ocgcore/mtrandom.h"
 
 namespace ygo {
 
@@ -28,9 +26,9 @@ bool ReplayMode::StartReplay(int skipturn) {
 		skip_turn = 0; 
 	yrp = cur_replay.pheader.id == 0x31707279;
 	if(yrp)
-		Thread::NewThread(OldReplayThread, 0);
+		std::thread(OldReplayThread).detach();
 	else
-		Thread::NewThread(ReplayThread, 0);
+		std::thread(ReplayThread).detach();
 	return true;
 }
 void ReplayMode::StopReplay(bool is_exiting) {
@@ -55,7 +53,7 @@ void ReplayMode::Pause(bool is_pause, bool is_step) {
 		mainGame->actionSignal.Set();
 	}
 }
-int ReplayMode::ReplayThread(void* param) {
+int ReplayMode::ReplayThread() {
 	const ReplayHeader& rh = cur_replay.pheader;
 	mainGame->dInfo.isFirst = true;
 	mainGame->dInfo.isTag = !!(rh.flag & REPLAY_TAG);
@@ -65,20 +63,20 @@ int ReplayMode::ReplayThread(void* param) {
 	mainGame->dInfo.current_player[0] = 0;
 	mainGame->dInfo.current_player[1] = 0;
 	if (mainGame->dInfo.isRelay) {
-		cur_replay.ReadName(mainGame->dInfo.hostname[0]);
-		cur_replay.ReadName(mainGame->dInfo.hostname[1]);
-		cur_replay.ReadName(mainGame->dInfo.hostname[2]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[0]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[1]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[2]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[0][0]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[1][0]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[2][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[0][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[1][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[2][0]);
 	} else if (mainGame->dInfo.isTag) {
-		cur_replay.ReadName(mainGame->dInfo.hostname[0]);
-		cur_replay.ReadName(mainGame->dInfo.hostname[1]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[1]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[0]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[0][0]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[1][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[1][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[0][0]);
 	} else {
-		cur_replay.ReadName(mainGame->dInfo.hostname[0]);
-		cur_replay.ReadName(mainGame->dInfo.clientname[0]);
+		cur_replay.ReadName(&mainGame->dInfo.hostname[0][0]);
+		cur_replay.ReadName(&mainGame->dInfo.clientname[0][0]);
 	}
 	int opt = cur_replay.ReadInt32();
 	mainGame->dInfo.duel_field = opt & 0xff;
@@ -97,11 +95,11 @@ int ReplayMode::ReplayThread(void* param) {
 	exit_pending = false;
 	current_step = 0;
 	if(mainGame->dInfo.isReplaySkiping)
-		mainGame->gMutex.Lock();
+		mainGame->gMutex.lock();
 	for(auto it = current_stream.begin(); is_continuing && !exit_pending && it != current_stream.end();) {
 		is_continuing = ReplayAnalyze((*it));
 		if(is_restarting) {
-			mainGame->gMutex.Lock();
+			mainGame->gMutex.lock();
 			it = current_stream.begin();
 			is_restarting = false;
 			int step = current_step - 1;
@@ -112,7 +110,7 @@ int ReplayMode::ReplayThread(void* param) {
 				mainGame->dInfo.isStarted = true;
 				mainGame->dInfo.isReplaySkiping = false;
 				mainGame->dField.RefreshAllCards();
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 			}
 			skip_step = step;
 			current_step = 0;
@@ -122,7 +120,7 @@ int ReplayMode::ReplayThread(void* param) {
 	if(mainGame->dInfo.isReplaySkiping) {
 		mainGame->dInfo.isReplaySkiping = false;
 		mainGame->dField.RefreshAllCards();
-		mainGame->gMutex.Unlock();
+		mainGame->gMutex.unlock();
 	}
 	EndDuel();
 	return 0;
@@ -132,26 +130,27 @@ void ReplayMode::EndDuel() {
 		end_duel(pduel);
 	if(!is_closing) {
 		mainGame->actionSignal.Reset();
-		mainGame->gMutex.Lock();
-		mainGame->stMessage->setText(dataManager.GetSysString(1501));
+		mainGame->gMutex.lock();
+		mainGame->stMessage->setText(dataManager.GetSysString(1501).c_str());
 		if(mainGame->wCardSelect->isVisible())
 			mainGame->HideElement(mainGame->wCardSelect);
 		mainGame->PopupElement(mainGame->wMessage);
-		mainGame->gMutex.Unlock();
+		mainGame->gMutex.unlock();
 		mainGame->actionSignal.Wait();
-		mainGame->gMutex.Lock();
+		mainGame->gMutex.lock();
 		mainGame->dInfo.isStarted = false;
 		mainGame->dInfo.isReplay = false;
 		mainGame->dInfo.isOldReplay = false;
-		mainGame->gMutex.Unlock();
+		mainGame->gMutex.unlock();
 		mainGame->closeDoneSignal.Reset();
-		mainGame->closeSignal.Set();
+		mainGame->closeSignal.lock();
 		mainGame->closeDoneSignal.Wait();
-		mainGame->gMutex.Lock();
+		mainGame->closeSignal.unlock();
+		mainGame->gMutex.lock();
 		mainGame->ShowElement(mainGame->wReplay);
 		mainGame->stTip->setVisible(false);
 		mainGame->device->setEventReceiver(&mainGame->menuHandler);
-		mainGame->gMutex.Unlock();
+		mainGame->gMutex.unlock();
 		if(exit_on_return)
 			mainGame->device->closeDevice();
 	}
@@ -191,9 +190,9 @@ bool ReplayMode::ReplayAnalyze(ReplayPacket p) {
 		if(is_restarting)
 			break;
 		if(is_swapping) {
-			mainGame->gMutex.Lock();
+			mainGame->gMutex.lock();
 			mainGame->dField.ReplaySwap();
-			mainGame->gMutex.Unlock();
+			mainGame->gMutex.unlock();
 			is_swapping = false;
 		}
 		bool pauseable = true;
@@ -203,12 +202,12 @@ bool ReplayMode::ReplayAnalyze(ReplayPacket p) {
 			if(mainGame->dInfo.isReplaySkiping) {
 				mainGame->dInfo.isReplaySkiping = false;
 				mainGame->dField.RefreshAllCards();
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 			}
-			mainGame->gMutex.Lock();
+			mainGame->gMutex.lock();
 			mainGame->stMessage->setText(L"Error occurs.");
 			mainGame->PopupElement(mainGame->wMessage);
-			mainGame->gMutex.Unlock();
+			mainGame->gMutex.unlock();
 			mainGame->actionSignal.Reset();
 			mainGame->actionSignal.Wait();
 			return false;
@@ -217,7 +216,7 @@ bool ReplayMode::ReplayAnalyze(ReplayPacket p) {
 			if (mainGame->dInfo.isReplaySkiping) {
 				mainGame->dInfo.isReplaySkiping = false;
 				mainGame->dField.RefreshAllCards();
-				mainGame->gMutex.Unlock();
+				mainGame->gMutex.unlock();
 			}
 			DuelClient::ClientAnalyze((char*)p.data, p.length);
 			return false;
@@ -255,21 +254,20 @@ bool ReplayMode::ReplayAnalyze(ReplayPacket p) {
 				if(skip_turn == 0) {
 					mainGame->dInfo.isReplaySkiping = false;
 					mainGame->dField.RefreshAllCards();
-					mainGame->gMutex.Unlock();
+					mainGame->gMutex.unlock();
 				}
 			}
 			break;
 		}
 		case MSG_AI_NAME: {
 			char* pbuf =(char*) p.data;
-			char namebuf[128];
-			wchar_t wname[128];
 			int len = BufferIO::ReadInt16(pbuf);
 			char* begin = pbuf;
 			pbuf += len + 1;
-			memcpy(namebuf, begin, len + 1);
-			BufferIO::DecodeUTF8(namebuf, wname);
-			BufferIO::CopyWStr(wname, mainGame->dInfo.clientname[0], 20);
+			std::string namebuf;
+			namebuf.resize(len);
+			memcpy(&namebuf[0], begin, len + 1);
+			mainGame->dInfo.clientname[0] = BufferIO::DecodeUTF8s(namebuf);
 			return true;
 		}
 		case OLD_REPLAY_MODE:
@@ -285,7 +283,7 @@ bool ReplayMode::ReplayAnalyze(ReplayPacket p) {
 					mainGame->dInfo.isStarted = true;
 					mainGame->dInfo.isReplaySkiping = false;
 					mainGame->dField.RefreshAllCards();
-					mainGame->gMutex.Unlock();
+					mainGame->gMutex.unlock();
 				}
 			}
 			if(is_pausing) {

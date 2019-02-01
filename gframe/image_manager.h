@@ -4,18 +4,37 @@
 #include "config.h"
 #include "data_manager.h"
 #include <unordered_map>
+#include <atomic>
+#include <future>
 
 namespace ygo {
 
 class ImageManager {
+private:
+	typedef std::pair<IImage*, std::string> image_path;
+	typedef std::map<int, std::future<image_path>> loading_map;
+	typedef unsigned long long chrono_time;
 public:
+	ImageManager() {
+		loading_pics[0] = new loading_map();
+		loading_pics[1] = new loading_map();
+		loading_pics[2] = new loading_map();
+	}
+	~ImageManager() {
+		delete loading_pics[0];
+		delete loading_pics[1];
+		delete loading_pics[2];
+	}
 	bool Initial();
 	void SetDevice(irr::IrrlichtDevice* dev);
 	void ClearTexture();
 	void RemoveTexture(int code);
-	irr::video::ITexture* GetTextureFromFile(char* file, s32 width, s32 height);
-	irr::video::ITexture* GetTexture(int code, bool fit = false);
-	irr::video::ITexture* GetTextureThumb(int code);
+	void RefreshCachedTextures();
+	void ClearCachedTextures();
+	bool imageScaleNNAA(irr::video::IImage *src, irr::video::IImage *dest, s32 width, s32 height, chrono_time timestamp_id, std::atomic<chrono_time>& source_timestamp_id);
+	irr::video::IImage* GetTextureFromFile(const char* file, s32 width, s32 height, chrono_time timestamp_id, std::atomic<chrono_time>& source_timestamp_id);
+	irr::video::ITexture* GetTexture(int code, bool wait = false, bool fit = false, int* chk = nullptr);
+	irr::video::ITexture* GetTextureThumb(int code, bool wait = false, int* chk = nullptr);
 	irr::video::ITexture* GetTextureField(int code);
 
 	std::unordered_map<int, irr::video::ITexture*> tMap[2];
@@ -43,6 +62,12 @@ public:
 	irr::video::ITexture* tBackGround_deck;
 	irr::video::ITexture* tField[2][4];
 	irr::video::ITexture* tFieldTransparent[2][4];
+private:
+	void ClearFutureObjects(loading_map * map);
+	image_path LoadCardTexture(int code, int width, int height, chrono_time timestamp_id, std::atomic<chrono_time>& source_timestamp_id);
+	loading_map* loading_pics[3];
+	std::mutex pic_load;
+	std::atomic<chrono_time> timestamp_id[3];
 };
 
 extern ImageManager imageManager;

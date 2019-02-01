@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include <time.h>
+#include <vector>
 
 namespace ygo {
 
@@ -28,7 +29,7 @@ class ReplayPacket {
 public:
 	int message;
 	int length;
-	unsigned char data[0x2000];
+	unsigned char data[0x20000];
 	ReplayPacket() {}
 	ReplayPacket(char * buf, int len);
 	ReplayPacket(int msg, char * buf, int len);
@@ -42,6 +43,7 @@ public:
 	void BeginRecord(bool write = true);
 	void WriteStream(std::vector<ReplayPacket> stream);
 	void WritePacket(ReplayPacket p);
+	void Write(const void* data, size_t size, bool flush);
 	void WriteHeader(ReplayHeader& header);
 	void WriteData(const void* data, unsigned int length, bool flush = true);
 	void WriteInt32(int data, bool flush = true);
@@ -49,13 +51,13 @@ public:
 	void WriteInt8(char data, bool flush = true);
 	void Flush();
 	void EndRecord(size_t size = 0x20000);
-	void SaveReplay(const wchar_t* name);
-	bool OpenReplay(const wchar_t* name);
-	static bool CheckReplay(const wchar_t* name);
+	void SaveReplay(const std::wstring& name);
+	bool OpenReplay(const std::wstring& name);
+	static bool CheckReplay(const std::wstring& name);
 	bool ReadNextPacket(ReplayPacket* packet);
 	bool ReadStream(std::vector<ReplayPacket>* stream);
-	static bool DeleteReplay(const wchar_t* name);
-	static bool RenameReplay(const wchar_t* oldname, const wchar_t* newname);
+	static bool DeleteReplay(const std::wstring& name);
+	static bool RenameReplay(const std::wstring& oldname, const std::wstring& newname);
 	bool ReadNextResponse(unsigned char resp[64]);
 	void ReadName(wchar_t* data);
 	void ReadData(void* data, unsigned int length);

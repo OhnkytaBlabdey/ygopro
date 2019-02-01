@@ -5,7 +5,7 @@
 #include "data_manager.h"
 #include "deck_manager.h"
 #include "replay.h"
-#include "../ocgcore/mtrandom.h"
+#include <random>
 
 namespace ygo {
 
@@ -35,8 +35,8 @@ public:
 	static void SwapField();
 	static void Pause(bool is_pause, bool is_step);
 	static bool ReadReplayResponse();
-	static int ReplayThread(void* param);
-	static int OldReplayThread(void* param);
+	static int ReplayThread();
+	static int OldReplayThread();
 	static bool StartDuel();
 	static void EndDuel();
 	static void Restart(bool refresh);
@@ -48,9 +48,6 @@ public:
 	static void ReplayRefresh(int flag = 0xf81fff);
 	static void ReplayRefreshSingle(int player, int location, int sequence, int flag = 0xf81fff);
 	static void ReplayReload();
-
-	static byte* ScriptReaderEx(const char* script_name, int* slen);
-	static int MessageHandler(long fduel, int type);
 };
 
 }
