@@ -1,0 +1,9 @@
+bin/
+build/
+event/
+freetype/
+gframe/ygopro.ico
+gframe/ygopro.rc
+irrlicht/
+obj/
+sqlite3/
