@@ -15,7 +15,7 @@ IRRKLANG_PRO=false
 		defines { "WIN32", "_WIN32", "WINVER=0x0501" }
 		libdirs { "$(DXSDK_DIR)Lib/x86" }
 		entrypoint "mainCRTStartup"
-		toolset "v140_xp"
+		toolset "v141"
 		startproject "ygopro"
 
 	configuration "bsd"
