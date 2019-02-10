@@ -8,6 +8,7 @@ solution "ygo"
 			IRRKLANG_PRO = true
 		end
 	end
+USE_IRRKLANG=false
 IRRKLANG_PRO=false
 	configurations { "Release", "Debug" }
 	configuration "windows"
