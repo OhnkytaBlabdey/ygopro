@@ -5,6 +5,8 @@
 /bin
 /build
 /event
+/freetype
+/irrlicht
 /lua
 /sqlite3
 /replay
