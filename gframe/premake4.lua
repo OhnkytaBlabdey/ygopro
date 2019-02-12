@@ -1,46 +1,27 @@
 include "lzma/."
 
 project "ygopro"
-    kind "WindowedApp"
+	kind "ConsoleApp"
+	
+	defines { "YGOPRO_SERVER_MODE" }
 
-    files { "**.cpp", "**.cc", "**.c", "**.h" }
-    excludes "lzma/**"
-    includedirs { "../ocgcore" }
-    links { "ocgcore", "clzma", "Irrlicht", "freetype", "sqlite3", "lua" , "event" }
-    if USE_IRRKLANG then
-        defines { "YGOPRO_USE_IRRKLANG" }
-        links { "ikpmp3" }
-        includedirs { "../irrklang/include" }
-        if IRRKLANG_PRO then
-            defines { "IRRKLANG_STATIC" }
-        end
-    end
+	files { "gframe.cpp", "config.h",
+			"game.cpp", "game.h", "myfilesystem.h",
+			"deck_manager.cpp", "deck_manager.h",
+			"data_manager.cpp", "data_manager.h",
+			"replay.cpp", "replay.h",
+			"netserver.cpp", "netserver.h",
+			"single_duel.cpp", "single_duel.h",
+			"tag_duel.cpp", "tag_duel.h" }
+	includedirs { "../ocgcore" }
+	links { "ocgcore", "clzma", "sqlite3", "lua" , "event"}
 
-    configuration "windows"
-        files "ygopro.rc"
-        excludes "CGUIButton.cpp"
-        includedirs { "../irrlicht/include", "../freetype/include", "../event/include", "../sqlite3" }
-        if USE_IRRKLANG then
-            links { "irrKlang" }
-            libdirs { "../irrklang/lib/Win32-visualStudio" }
-        end
-        links { "opengl32", "ws2_32", "winmm", "gdi32", "kernel32", "user32", "imm32" }
-    configuration {"windows", "not vs*"}
-        includedirs { "/mingw/include/irrlicht", "/mingw/include/freetype2" }
-    configuration "not vs*"
-        buildoptions { "-std=c++14", "-fno-rtti" }
-    configuration "not windows"
-        includedirs { "/usr/include/irrlicht", "/usr/include/freetype2" }
-        excludes { "COSOperator.*" }
-        links { "event_pthreads", "GL", "dl", "pthread" }
-    configuration "linux"
-        if USE_IRRKLANG then
-            links { "IrrKlang" }
-            linkoptions{ "-Wl,-rpath=./" }
-            libdirs { "../irrklang/bin/linux-gcc-64" }
-        end
-    configuration "macosx"
-        if USE_IRRKLANG then
-            links { "irrklang" }
-            libdirs { "../irrklang/bin/macosx-gcc" }
-        end
+	configuration "windows"
+		files "ygopro.rc"
+		includedirs { "../event/include", "../sqlite3" }
+		links { "ws2_32" }
+
+	configuration "not vs*"
+		buildoptions { "-std=c++1y", "-fno-rtti" }
+	configuration "not windows"
+		links { "event_pthreads", "dl", "pthread" }

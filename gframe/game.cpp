@@ -1,5 +1,10 @@
 #include "config.h"
 #include "game.h"
+#ifdef YGOPRO_SERVER_MODE
+#include "data_manager.h"
+#include "deck_manager.h"
+#include "replay.h"
+#else
 #include "image_manager.h"
 #include "data_manager.h"
 #include "deck_manager.h"
@@ -9,6 +14,7 @@
 #include "duelclient.h"
 #include "netserver.h"
 #include "single_mode.h"
+#endif //YGOPRO_SERVER_MODE
 
 const unsigned short PRO_VERSION = 0x1348;
 
@@ -16,6 +22,30 @@ namespace ygo {
 
 Game* mainGame;
 
+#ifdef YGOPRO_SERVER_MODE
+unsigned short aServerPort;
+unsigned short replay_mode;
+HostInfo game_info;
+
+void Game::MainServerLoop() {
+	deckManager.LoadLFList();
+	LoadExpansionDB();
+	dataManager.LoadDB("cards.cdb");
+	
+	aServerPort = NetServer::StartServer(aServerPort);
+	NetServer::InitDuel();
+	printf("%u\n", aServerPort);
+	fflush(stdout);
+	
+	while(NetServer::net_evbase) {
+#ifdef WIN32
+		Sleep(200);
+#else
+		usleep(200000);
+#endif
+	}
+}
+#else //YGOPRO_SERVER_MODE
 bool Game::Initialize() {
 	srand(time(0));
 	LoadConfig();
@@ -862,6 +892,7 @@ void Game::SetStaticText(irr::gui::IGUIStaticText* pControl, u32 cWidth, irr::gu
 	dataManager.strBuffer[pbuffer] = 0;
 	pControl->setText(dataManager.strBuffer);
 }
+#endif //YGOPRO_SERVER_MODE
 void Game::LoadExpansionDB() {
 	FileSystem::TraversalDir("./expansions", [](const char* name, bool isdir) {
 		if(!isdir && strrchr(name, '.') && !mystrncasecmp(strrchr(name, '.'), ".cdb", 4)) {
@@ -871,6 +902,7 @@ void Game::LoadExpansionDB() {
 		}
 	});
 }
+#ifndef YGOPRO_SERVER_MODE
 void Game::RefreshDeck(irr::gui::IGUIComboBox* cbDeck) {
 	cbDeck->clear();
 	FileSystem::TraversalDir(L"./deck", [cbDeck](const wchar_t* name, bool isdir) {
@@ -1288,7 +1320,11 @@ void Game::ClearChatMsg() {
 		chatTiming[i] = 0;
 	}
 }
+#endif //YGOPRO_SERVER_MODE
 void Game::AddDebugMsg(const char* msg) {
+#ifdef YGOPRO_SERVER_MODE
+	fprintf(stderr, "%s\n", msg);
+#else
 	if (enable_log & 0x1) {
 		wchar_t wbuf[1024];
 		BufferIO::DecodeUTF8(msg, wbuf);
@@ -1299,7 +1335,9 @@ void Game::AddDebugMsg(const char* msg) {
 		sprintf(msgbuf, "[Script Error]: %s", msg);
 		ErrorLog(msgbuf);
 	}
+#endif //YGOPRO_SERVER_MODE
 }
+#ifndef YGOPRO_SERVER_MODE
 void Game::ErrorLog(const char* msg) {
 	FILE* fp = fopen("error.log", "at");
 	if(!fp)
@@ -1398,5 +1436,6 @@ void Game::SetCursor(ECURSOR_ICON icon) {
 		cursor->setActiveIcon(icon);
 	}
 }
+#endif //YGOPRO_SERVER_MODE
 
 }
