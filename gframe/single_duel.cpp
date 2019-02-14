@@ -593,6 +593,9 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 #endif
 	RefreshExtra(0);
 	RefreshExtra(1);
+#ifdef YGOPRO_SERVER_MODE
+	opt |= DUEL_ATTACK_FIRST_TURN;
+#endif
 	start_duel(pduel, opt);
 	Process();
 }
