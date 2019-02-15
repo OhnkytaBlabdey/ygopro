@@ -516,13 +516,17 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	last_replay.WriteData(players[0]->name, 40, false);
 	last_replay.WriteData(players[1]->name, 40, false);
 	if(!host_info.no_shuffle_deck) {
-		for(size_t i = pdeck[0].main.size() - 1; i > 0; --i) {
-			int swap = rnd.real() * (i + 1);
-			std::swap(pdeck[0].main[i], pdeck[0].main[swap]);
+		if (pdeck[0].main.size()) {
+			for (size_t i = pdeck[0].main.size() - 1; i > 0; --i) {
+				int swap = rnd.real() * (i + 1);
+				std::swap(pdeck[0].main[i], pdeck[0].main[swap]);
+			}
 		}
-		for(size_t i = pdeck[1].main.size() - 1; i > 0; --i) {
-			int swap = rnd.real() * (i + 1);
-			std::swap(pdeck[1].main[i], pdeck[1].main[swap]);
+		if (pdeck[1].main.size()) {
+			for (size_t i = pdeck[1].main.size() - 1; i > 0; --i) {
+				int swap = rnd.real() * (i + 1);
+				std::swap(pdeck[1].main[i], pdeck[1].main[swap]);
+			}
 		}
 	}
 	time_limit[0] = host_info.time_limit;
@@ -546,24 +550,28 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	last_replay.WriteInt32(opt, false);
 	last_replay.Flush();
 	last_replay.WriteInt32(pdeck[0].main.size(), false);
-	for(int32 i = (int32)pdeck[0].main.size() - 1; i >= 0; --i) {
-		new_card(pduel, pdeck[0].main[i]->first, 0, 0, LOCATION_DECK, 0, POS_FACEDOWN_DEFENSE);
-		last_replay.WriteInt32(pdeck[0].main[i]->first, false);
+	if (pdeck[0].main.size()) {
+		for (int32 i = (int32)pdeck[0].main.size() - 1; i >= 0; --i) {
+			new_card(pduel, pdeck[0].main[i]->first, 0, 0, LOCATION_DECK, 0, POS_FACEDOWN_DEFENSE);
+			last_replay.WriteInt32(pdeck[0].main[i]->first, false);
+		}
+		last_replay.WriteInt32(pdeck[0].extra.size(), false);
+		for (int32 i = (int32)pdeck[0].extra.size() - 1; i >= 0; --i) {
+			new_card(pduel, pdeck[0].extra[i]->first, 0, 0, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
+			last_replay.WriteInt32(pdeck[0].extra[i]->first, false);
+		}
 	}
-	last_replay.WriteInt32(pdeck[0].extra.size(), false);
-	for(int32 i = (int32)pdeck[0].extra.size() - 1; i >= 0; --i) {
-		new_card(pduel, pdeck[0].extra[i]->first, 0, 0, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
-		last_replay.WriteInt32(pdeck[0].extra[i]->first, false);
-	}
-	last_replay.WriteInt32(pdeck[1].main.size(), false);
-	for(int32 i = (int32)pdeck[1].main.size() - 1; i >= 0; --i) {
-		new_card(pduel, pdeck[1].main[i]->first, 1, 1, LOCATION_DECK, 0, POS_FACEDOWN_DEFENSE);
-		last_replay.WriteInt32(pdeck[1].main[i]->first, false);
-	}
-	last_replay.WriteInt32(pdeck[1].extra.size(), false);
-	for(int32 i = (int32)pdeck[1].extra.size() - 1; i >= 0; --i) {
-		new_card(pduel, pdeck[1].extra[i]->first, 1, 1, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
-		last_replay.WriteInt32(pdeck[1].extra[i]->first, false);
+	if (pdeck[1].main.size()) {
+		last_replay.WriteInt32(pdeck[1].main.size(), false);
+		for (int32 i = (int32)pdeck[1].main.size() - 1; i >= 0; --i) {
+			new_card(pduel, pdeck[1].main[i]->first, 1, 1, LOCATION_DECK, 0, POS_FACEDOWN_DEFENSE);
+			last_replay.WriteInt32(pdeck[1].main[i]->first, false);
+		}
+		last_replay.WriteInt32(pdeck[1].extra.size(), false);
+		for (int32 i = (int32)pdeck[1].extra.size() - 1; i >= 0; --i) {
+			new_card(pduel, pdeck[1].extra[i]->first, 1, 1, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
+			last_replay.WriteInt32(pdeck[1].extra[i]->first, false);
+		}
 	}
 	last_replay.Flush();
 	char startbuf[32], *pbuf = startbuf;
