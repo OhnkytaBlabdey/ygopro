@@ -388,6 +388,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	rh.version = PRO_VERSION;
 	rh.flag = 0;
 	time_t seed = time(0);
+	seed = 19650218UL;
 	rh.seed = seed;
 	last_replay.BeginRecord();
 	last_replay.WriteHeader(rh);
