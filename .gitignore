@@ -10,3 +10,11 @@
 /obj/
 /sqlite3/
 premake5.exe
+ygopro.exe
+error.log
+/sound
+/pics
+/single
+/gframe/ygopro.icns
+/deck
+/replay
