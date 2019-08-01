@@ -12,9 +12,14 @@
 /replay
 /deck
 /.vscode
+/gframe/ygopro.icns
 /gframe/ygopro.ico
 /gframe/ygopro.rc
 /gframe/ygopro.aps
-ygopro
+/error.log
+/pics
+/sound
+/single
+ygopro.exe
 premake5.exe
 premake5
