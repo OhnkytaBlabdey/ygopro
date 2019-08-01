@@ -78,7 +78,7 @@ bool NetServer::StartServer(unsigned short port) {
 		return false;
 	}
 	evconnlistener_set_error_cb(listener, ServerAcceptError);
-	Thread::NewThread(ServerThread, net_evbase);
+	std::thread(ServerThread).detach();
 #ifdef YGOPRO_SERVER_MODE
 	evutil_socket_t fd = evconnlistener_get_fd(listener);
 	socklen_t addrlen = sizeof(sockaddr);
@@ -113,7 +113,12 @@ void NetServer::StopServer() {
 		return;
 	if(duel_mode)
 		duel_mode->EndDuel();
+#ifdef YGOPRO_SERVER_MODE // For solving the problem of connection lost after duel. See https://github.com/Fluorohydride/ygopro/issues/2067 for details.
+	timeval etv = { 0, 1 };
+	event_base_loopexit(net_evbase, &etv);
+#else
 	event_base_loopexit(net_evbase, 0);
+#endif
 }
 void NetServer::StopBroadcast() {
 	if(!net_evbase || !broadcast_ev)
@@ -189,7 +194,7 @@ void NetServer::ServerEchoEvent(bufferevent* bev, short events, void* ctx) {
 		else DisconnectPlayer(dp);
 	}
 }
-int NetServer::ServerThread(void* param) {
+int NetServer::ServerThread() {
 	event_base_dispatch(net_evbase);
 	for(auto bit = users.begin(); bit != users.end(); ++bit) {
 		bufferevent_disable(bit->first, EV_READ);
@@ -254,7 +259,7 @@ void NetServer::HandleCTOSPacket(DuelPlayer* dp, char* data, unsigned int len) {
 	case CTOS_UPDATE_DECK: {
 		if(!dp->game)
 			return;
-		duel_mode->UpdateDeck(dp, pdata);
+		duel_mode->UpdateDeck(dp, pdata, len - 1);
 		break;
 	}
 	case CTOS_HAND_RESULT: {

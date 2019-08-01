@@ -86,8 +86,15 @@ int main(int argc, char* argv[]) {
 		ygo::game_info.mode = mode;
 		if(argv[5][0] == 'T')
 			ygo::game_info.duel_rule = DEFAULT_DUEL_RULE - 1;
-		else
+		else if(argv[5][0] == 'F')
 			ygo::game_info.duel_rule = DEFAULT_DUEL_RULE;
+		else {
+			int master_rule = atoi(argv[5]);
+			if(master_rule)
+				ygo::game_info.duel_rule = master_rule;
+			else
+				ygo::game_info.duel_rule = DEFAULT_DUEL_RULE;
+		}
 		if(argv[6][0] == 'T')
 			ygo::game_info.no_check_deck = true;
 		else
@@ -126,17 +133,13 @@ int main(int argc, char* argv[]) {
 	bool keep_on_return = false;
 	for(int i = 1; i < wargc; ++i) {
 		if(wargv[i][0] == L'-' && wargv[i][1] == L'e' && wargv[i][2] != L'\0') {
-			char param[128];
-			BufferIO::EncodeUTF8(&wargv[i][2], param);
-			ygo::dataManager.LoadDB(param);
+			ygo::dataManager.LoadDB(&wargv[i][2]);
 			continue;
 		}
 		if(!wcscmp(wargv[i], L"-e")) { // extra database
 			++i;
 			if(i < wargc) {
-				char param[128];
-				BufferIO::EncodeUTF8(wargv[i], param);
-				ygo::dataManager.LoadDB(param);
+				ygo::dataManager.LoadDB(wargv[i]);
 			}
 			continue;
 		} else if(!wcscmp(wargv[i], L"-n")) { // nickName
