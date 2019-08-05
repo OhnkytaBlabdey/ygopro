@@ -29,3 +29,4 @@ premake5
 /single
 /pics
 error.log
+/*.exe
