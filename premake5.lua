@@ -12,10 +12,10 @@ USE_IRRKLANG=false
 IRRKLANG_PRO=false
 	configurations { "Release", "Debug" }
 	configuration "windows"
-		defines { "WIN32", "_WIN32", "WINVER=0x0501" }
+		defines { "WIN32", "_WIN32", "WINVER=0x0A00" }
 		libdirs { "$(DXSDK_DIR)Lib/x86" }
 		entrypoint "mainCRTStartup"
-		toolset "v141"
+		toolset "v142"
 		startproject "ygopro"
 
 	configuration "bsd"
