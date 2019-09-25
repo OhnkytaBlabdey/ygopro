@@ -7,7 +7,7 @@
 /gframe/ygopro.rc
 /gframe/ygopro.aps
 /irrlicht/
-/lua/
+#/lua/
 /obj/
 /sqlite3/
 premake5.exe
