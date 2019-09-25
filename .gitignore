@@ -21,4 +21,5 @@ premake5.exe
 /replay
 /error.log
 /ygopro.exe
+/*.bat
 
