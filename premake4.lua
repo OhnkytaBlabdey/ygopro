@@ -7,7 +7,7 @@ solution "ygo"
     configurations { "Debug", "Release" }
 
     configuration "windows"
-        defines { "WIN32", "_WIN32", "WINVER=0x0501" }
+        defines { "WIN32", "_WIN32" }
 
     configuration "bsd"
         defines { "LUA_USE_POSIX" }
@@ -41,9 +41,6 @@ solution "ygo"
         flags "Symbols"
         defines "NDEBUG"
         buildoptions "-march=native"
-
-    configuration { "Release", "vs*" }
-        flags { "StaticRuntime", "LinkTimeOptimization" }
 
     configuration { "Debug", "vs*" }
         defines { "_ITERATOR_DEBUG_LEVEL=0" }
