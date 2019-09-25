@@ -20,7 +20,9 @@ premake5.exe
 premake5
 /gframe/ygopro.icns
 /sound
-/ygopro.exe
+/*.exe
+/*.bat
+/*.cdb
 /single
 /pics
 error.log
