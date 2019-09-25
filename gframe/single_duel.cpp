@@ -4,6 +4,8 @@
 #include "../ocgcore/ocgapi.h"
 #include "../ocgcore/common.h"
 #include "../ocgcore/mtrandom.h"
+#include "../ocgcore/duel.h"
+#include "../ocgcore/field.h"
 
 #define ONLINE_PUZZLE
 namespace ygo {
@@ -583,18 +585,21 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		new_card(pduel, pdeck[1].extra[i]->first, 1, 1, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
 		last_replay.WriteInt32(pdeck[1].extra[i]->first, false);
 	}
+	last_replay.Flush();
 #else
 	if (!preload_script(pduel, "./single/xx.lua", 0)) {
 		printf_s("load error.\n");
 	}
 #endif
-	last_replay.Flush();
 	char startbuf[32], *pbuf = startbuf;
-	BufferIO::WriteInt8(pbuf, MSG_START);
+	BufferIO::WriteInt8(pbuf, MSG_RELOAD_FIELD);
 	BufferIO::WriteInt8(pbuf, 0);
+	duel *pd = (duel*) pduel;
 	BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-	BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	// BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	// BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	BufferIO::WriteInt32(pbuf, pd->game_field->player[0].lp);
+	BufferIO::WriteInt32(pbuf, pd->game_field->player[1].lp);
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x1));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x40));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x1));
