@@ -5,6 +5,7 @@
 #include "../ocgcore/common.h"
 #include "../ocgcore/mtrandom.h"
 
+#define ONLINE_PUZZLE
 namespace ygo {
 
 #ifdef YGOPRO_SERVER_MODE
@@ -527,6 +528,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	rnd.reset(seed);
 	last_replay.WriteData(players[0]->name, 40, false);
 	last_replay.WriteData(players[1]->name, 40, false);
+#ifndef ONLINE_PUZZLE
 	if(!host_info.no_shuffle_deck) {
 		for(size_t i = pdeck[0].main.size() - 1; i > 0; --i) {
 			int swap = rnd.real() * (i + 1);
@@ -537,6 +539,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 			std::swap(pdeck[1].main[i], pdeck[1].main[swap]);
 		}
 	}
+#endif
 	time_limit[0] = host_info.time_limit;
 	time_limit[1] = host_info.time_limit;
 	set_script_reader((script_reader)DataManager::ScriptReaderEx);
@@ -547,8 +550,10 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 #ifdef YGOPRO_SERVER_MODE
 	preload_script(pduel, "./script/special.lua", 0);
 #endif
+#ifndef ONLINE_PUZZLE
 	set_player_info(pduel, 0, host_info.start_lp, host_info.start_hand, host_info.draw_count);
 	set_player_info(pduel, 1, host_info.start_lp, host_info.start_hand, host_info.draw_count);
+#endif
 	int opt = (int)host_info.duel_rule << 16;
 	if(host_info.no_shuffle_deck)
 		opt |= DUEL_PSEUDO_SHUFFLE;
@@ -557,6 +562,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	last_replay.WriteInt32(host_info.draw_count, false);
 	last_replay.WriteInt32(opt, false);
 	last_replay.Flush();
+#ifndef ONLINE_PUZZLE
 	last_replay.WriteInt32(pdeck[0].main.size(), false);
 	for(int32 i = (int32)pdeck[0].main.size() - 1; i >= 0; --i) {
 		new_card(pduel, pdeck[0].main[i]->first, 0, 0, LOCATION_DECK, 0, POS_FACEDOWN_DEFENSE);
@@ -577,6 +583,11 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		new_card(pduel, pdeck[1].extra[i]->first, 1, 1, LOCATION_EXTRA, 0, POS_FACEDOWN_DEFENSE);
 		last_replay.WriteInt32(pdeck[1].extra[i]->first, false);
 	}
+#else
+	if (!preload_script(pduel, "./single/xx.lua", 0)) {
+		printf_s("load error.\n");
+	}
+#endif
 	last_replay.Flush();
 	char startbuf[32], *pbuf = startbuf;
 	BufferIO::WriteInt8(pbuf, MSG_START);
