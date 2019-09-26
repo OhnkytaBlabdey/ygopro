@@ -593,6 +593,11 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	if (!preload_script(pduel, "./single/xx.lua", 0)) {
 		printf_s("load error.\n");
 	}
+	char engineBuffer[0x1000];
+	bool is_continuing = true;
+	int len = get_message(pduel, (byte*)engineBuffer);
+	if (len > 0)
+		is_continuing = Analyze(engineBuffer, len);
 #endif
 #endif //YGOPRO_SERVER_MODE
 
@@ -602,7 +607,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 #endif
 #ifdef ONLINE_PUZZLE
 	for (int i = 0; i < 2; ++i) {
-		//NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
+		NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
 
 		char startbuf[32], * pbuf = startbuf;
 		BufferIO::WriteInt8(pbuf, MSG_START);
@@ -621,12 +626,12 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
 
 	}
-	int newturn_count = 1;
-	char turnbuf[2], * pbuf_t = turnbuf;
-	BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
-	BufferIO::WriteInt8(pbuf_t, 0);
-	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, turnbuf, 2);
-	NetServer::ReSendToPlayer(players[1]);
+	//int newturn_count = 1;
+	//char turnbuf[2], * pbuf_t = turnbuf;
+	//BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
+	//BufferIO::WriteInt8(pbuf_t, 0);
+	//NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, turnbuf, 2);
+	//NetServer::ReSendToPlayer(players[1]);
 	
 
 	char phasebuf[4], * pbuf_p = phasebuf;
