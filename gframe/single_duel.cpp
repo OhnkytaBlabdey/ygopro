@@ -626,13 +626,14 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
 	BufferIO::WriteInt8(pbuf_t, 0);
 	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, turnbuf, 2);
-	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, turnbuf, 2);
+	NetServer::ReSendToPlayer(players[1]);
+	
 
 	char phasebuf[4], * pbuf_p = phasebuf;
 	BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
 	BufferIO::WriteInt16(pbuf_p, phase);
 	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, phasebuf, 3);
-	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, phasebuf, 3);
+	NetServer::ReSendToPlayer(players[1]);
 
 	RefreshMzone(0, 0xefffff, 0);
 	RefreshMzone(1, 0xefffff, 0);
