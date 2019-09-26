@@ -602,8 +602,6 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	turn_player = 0;
 	phase = 1;
 #endif
-//#ifdef YGOPRO_SERVER_MODE
-
 #ifdef ONLINE_PUZZLE
 	 for (int i = 0; i < 2; ++i) {
 		 //NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
@@ -623,30 +621,35 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		 char query_buffer[1024];
 		 int length = query_field_info(pduel, (unsigned char*)query_buffer);
 		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
-		 RefreshMzone(i, 0xefffff, 0);
-		 RefreshMzone(1 - i, 0xefffff, 0);
-		 RefreshSzone(1 - i, 0xefffff, 0);
-		 RefreshSzone(i, 0xefffff, 0);
-		 RefreshHand(1 - i, 0xefffff, 0);
-		 RefreshHand(i, 0xefffff, 0);
-		 RefreshGrave(1 - i, 0xefffff, 0);
-		 RefreshGrave(i, 0xefffff, 0);
-		 RefreshExtra(1 - i, 0xefffff, 0);
-		 RefreshExtra(i, 0xefffff, 0);
-		 RefreshRemoved(1 - i, 0xefffff, 0);
-		 RefreshRemoved(i, 0xefffff, 0);
-		 NetServer::SendPacketToPlayer(players[i], STOC_FIELD_FINISH);
+		 
 	 }
+	int newturn_count = 1;
+	char turnbuf[2], * pbuf_t = turnbuf;
+	BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
+	BufferIO::WriteInt8(pbuf_t, 0);
+	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, turnbuf, 2);
+	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, turnbuf, 2);
+
+	 char phasebuf[4], * pbuf_p = phasebuf;
+	 BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
+	 BufferIO::WriteInt16(pbuf_p, phase);
+	 NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, phasebuf, 3);
+	 NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, phasebuf, 3);
+	RefreshMzone(0, 0xefffff, 0);
+	RefreshMzone(1, 0xefffff, 0);
+	RefreshSzone(1, 0xefffff, 0);
+	RefreshSzone(0, 0xefffff, 0);
+	RefreshHand(1, 0xefffff, 0);
+	RefreshHand(0, 0xefffff, 0);
+	RefreshGrave(1, 0xefffff, 0);
+	RefreshGrave(0, 0xefffff, 0);
+	RefreshExtra(1, 0xefffff, 0);
+	RefreshExtra(0, 0xefffff, 0);
+	RefreshRemoved(1, 0xefffff, 0);
+	RefreshRemoved(0, 0xefffff, 0);
+	NetServer::SendPacketToPlayer(players[0], STOC_FIELD_FINISH);
+	NetServer::SendPacketToPlayer(players[1], STOC_FIELD_FINISH);
 #endif // ONLINE_PUZZLE
-
-//#endif // YGOPRO_SERVER_MODE
-
-	//RefreshExtra(0);
-	//RefreshExtra(1);
-	//RefreshGrave(0);
-	//RefreshGrave(1);
-	// RefreshRemoved(0);
-	// RefreshRemoved(1);
 	start_duel(pduel, opt);
 	Process();
 }
