@@ -14,7 +14,7 @@ premake5.exe
 /gframe/ygopro.icns
 /*.exe
 /pics
-/cards.cdb
+
 /deck
 /single
 /sound

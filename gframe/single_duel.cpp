@@ -411,6 +411,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	rnd.reset(seed);
 	last_replay.WriteData(players[0]->name, 40, false);
 	last_replay.WriteData(players[1]->name, 40, false);
+#ifndef YGOPRO_SERVER_MODE
 #ifndef ONLINE_PUZZLE
 	if(!host_info.no_shuffle_deck) {
 		for(size_t i = pdeck[0].main.size() - 1; i > 0; --i) {
@@ -423,6 +424,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		}
 	}
 #endif // !ONLINE_PUZZLE
+#endif
 	time_limit[0] = host_info.time_limit;
 	time_limit[1] = host_info.time_limit;
 	set_script_reader((script_reader)DataManager::ScriptReaderEx);
@@ -469,14 +471,11 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	// do nothing because replay has many bugs.
 #endif // !ONLINE_PUZZLE
 	char startbuf[32], *pbuf = startbuf;
-	BufferIO::WriteInt8(pbuf, MSG_RELOAD_FIELD);
+	BufferIO::WriteInt8(pbuf, MSG_START);
 	BufferIO::WriteInt8(pbuf, 0);
-	duel *pd = (duel*) pduel;
 	BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-	//BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	BufferIO::WriteInt32(pbuf, pd->game_field->player[0].lp);
-	BufferIO::WriteInt32(pbuf, pd->game_field->player[1].lp);
-	//BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	BufferIO::WriteInt32(pbuf, host_info.start_lp);
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x1));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x40));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x1));
@@ -489,8 +488,18 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	else startbuf[1] = 0x11;
 	for(auto oit = observers.begin(); oit != observers.end(); ++oit)
 		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, startbuf, 19);
+	
+	char reload_buf[256];
+	pbuf = reload_buf;
+	int len = query_field_info(pduel, (byte*)pbuf);
+	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, reload_buf, len);
+	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, reload_buf, len);
+	for (auto oit = observers.begin(); oit != observers.end(); ++oit)
+		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, reload_buf, len);
 	RefreshExtra(0);
 	RefreshExtra(1);
+	RefreshGrave(0);
+	RefreshGrave(1);
 	start_duel(pduel, opt);
 	Process();
 }
