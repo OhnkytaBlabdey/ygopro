@@ -564,6 +564,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	last_replay.WriteInt32(host_info.draw_count, false);
 	last_replay.WriteInt32(opt, false);
 	last_replay.Flush();
+#ifdef YGOPRO_SERVER_MODE
 #ifndef ONLINE_PUZZLE
 	last_replay.WriteInt32(pdeck[0].main.size(), false);
 	for(int32 i = (int32)pdeck[0].main.size() - 1; i >= 0; --i) {
@@ -591,15 +592,13 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		printf_s("load error.\n");
 	}
 #endif
+#endif //YGOPRO_SERVER_MODE
 	char startbuf[32], *pbuf = startbuf;
-	BufferIO::WriteInt8(pbuf, MSG_RELOAD_FIELD);
+	BufferIO::WriteInt8(pbuf, MSG_START);
 	BufferIO::WriteInt8(pbuf, 0);
-	duel *pd = (duel*) pduel;
 	BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-	// BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	// BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	BufferIO::WriteInt32(pbuf, pd->game_field->player[0].lp);
-	BufferIO::WriteInt32(pbuf, pd->game_field->player[1].lp);
+	BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	BufferIO::WriteInt32(pbuf, host_info.start_lp);
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x1));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x40));
 	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x1));
@@ -612,6 +611,14 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	else startbuf[1] = 0x11;
 	for(auto oit = observers.begin(); oit != observers.end(); ++oit)
 		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, startbuf, 19);
+
+	char reload_buf[256];
+	pbuf = reload_buf;
+	int len = query_field_info(pduel, (byte*)pbuf);
+	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, reload_buf, len);
+	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, reload_buf, len);
+	for (auto oit = observers.begin(); oit != observers.end(); ++oit)
+		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, reload_buf, len);
 #ifdef YGOPRO_SERVER_MODE
 	if(cache_recorder)
 		NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
@@ -622,6 +629,10 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 #endif
 	RefreshExtra(0);
 	RefreshExtra(1);
+	RefreshGrave(0);
+	RefreshGrave(1);
+	RefreshRemoved(0);
+	RefreshRemoved(1);
 	start_duel(pduel, opt);
 	Process();
 }
