@@ -593,37 +593,38 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	}
 #endif
 #endif //YGOPRO_SERVER_MODE
-	char startbuf[32], *pbuf = startbuf;
-	BufferIO::WriteInt8(pbuf, MSG_START);
-	BufferIO::WriteInt8(pbuf, 0);
-	BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-	BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x1));
-	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x40));
-	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x1));
-	BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x40));
-	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, startbuf, 19);
-	startbuf[1] = 1;
-	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, startbuf, 19);
-	if(!swapped)
-		startbuf[1] = 0x10;
-	else startbuf[1] = 0x11;
-	for(auto oit = observers.begin(); oit != observers.end(); ++oit)
-		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, startbuf, 19);
+	 char startbuf[32], *pbuf = startbuf;
+	 BufferIO::WriteInt8(pbuf, MSG_START);
+	 BufferIO::WriteInt8(pbuf, 0);
+	 BufferIO::WriteInt8(pbuf, host_info.duel_rule);
+	 BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	 BufferIO::WriteInt32(pbuf, host_info.start_lp);
+	 BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x1));
+	 BufferIO::WriteInt16(pbuf, query_field_count(pduel, 0, 0x40));
+	 BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x1));
+	 BufferIO::WriteInt16(pbuf, query_field_count(pduel, 1, 0x40));
+	 NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, startbuf, 19);
+	 startbuf[1] = 1;
+	 NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, startbuf, 19);
+	 if(!swapped)
+	 	startbuf[1] = 0x10;
+	 else startbuf[1] = 0x11;
+	 for(auto oit = observers.begin(); oit != observers.end(); ++oit)
+	 	NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, startbuf, 19);
 
-	char reload_buf[256];
-	pbuf = reload_buf;
+	//char *pbuf;
+	byte reload_buf[256];
+	pbuf = (char*) reload_buf;
 	int len = query_field_info(pduel, (byte*)pbuf);
 	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, reload_buf, len);
 	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, reload_buf, len);
 	for (auto oit = observers.begin(); oit != observers.end(); ++oit)
 		NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, reload_buf, len);
 #ifdef YGOPRO_SERVER_MODE
-	if(cache_recorder)
-		NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
-	if(replay_recorder)
-		NetServer::SendBufferToPlayer(replay_recorder, STOC_GAME_MSG, startbuf, 19);
+	// if(cache_recorder)
+	// 	NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
+	// if(replay_recorder)
+	// 	NetServer::SendBufferToPlayer(replay_recorder, STOC_GAME_MSG, startbuf, 19);
 	turn_player = 0;
 	phase = 1;
 #endif
@@ -631,8 +632,8 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	RefreshExtra(1);
 	RefreshGrave(0);
 	RefreshGrave(1);
-	RefreshRemoved(0);
-	RefreshRemoved(1);
+	// RefreshRemoved(0);
+	// RefreshRemoved(1);
 	start_duel(pduel, opt);
 	Process();
 }
