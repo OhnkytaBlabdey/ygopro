@@ -593,36 +593,20 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	}
 #endif
 #endif //YGOPRO_SERVER_MODE
-	 //char startbuf[32], *pbuf = startbuf;
-	 //BufferIO::WriteInt8(pbuf, MSG_START);
-	 //BufferIO::WriteInt8(pbuf, 0);
-	 //BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-	 //BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	 //BufferIO::WriteInt32(pbuf, host_info.start_lp);
-	 //BufferIO::WriteInt16(pbuf, 0);
-	 //BufferIO::WriteInt16(pbuf, 0);
-	 //BufferIO::WriteInt16(pbuf, 0);
-	 //BufferIO::WriteInt16(pbuf, 0);
-	 //NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, startbuf, 19);
-	 //startbuf[1] = 1;
-	 //NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, startbuf, 19);
-	 //if(!swapped)
-	 //	startbuf[1] = 0x10;
-	 //else startbuf[1] = 0x11;
-	 //for(auto oit = observers.begin(); oit != observers.end(); ++oit)
-	 //	NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, startbuf, 19);
 
-	// char *pbuf;
-	// byte reload_buf[256];
-	// pbuf = (char*) reload_buf;
-	// int len = query_field_info(pduel, (byte*)pbuf);
-	//NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, reload_buf, len);
-	//NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, reload_buf, len);
-	//for (auto oit = observers.begin(); oit != observers.end(); ++oit)
-	//	NetServer::SendBufferToPlayer(*oit, STOC_GAME_MSG, reload_buf, len);
+#ifdef YGOPRO_SERVER_MODE
+// if(cache_recorder)
+// 	NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
+// if(replay_recorder)
+// 	NetServer::SendBufferToPlayer(replay_recorder, STOC_GAME_MSG, startbuf, 19);
+	turn_player = 0;
+	phase = 1;
+#endif
+//#ifdef YGOPRO_SERVER_MODE
+
 #ifdef ONLINE_PUZZLE
 	 for (int i = 0; i < 2; ++i) {
-		 NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
+		 //NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
 
 		 char startbuf[32], * pbuf = startbuf;
 		 BufferIO::WriteInt8(pbuf, MSG_START);
@@ -635,27 +619,12 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		 BufferIO::WriteInt16(pbuf, 0);
 		 BufferIO::WriteInt16(pbuf, 0);
 		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, startbuf, 19);
-
-		 int newturn_count = 1;
-		 if (turn_player == 1)
-			 newturn_count = 2;
-		 for (int i = 0; i < newturn_count; i++) {
-			 char turnbuf[2], * pbuf_t = turnbuf;
-			 BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
-			 BufferIO::WriteInt8(pbuf_t, i);
-			 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, turnbuf, 2);
-		 }
-
-		 char phasebuf[4], * pbuf_p = phasebuf;
-		 BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
-		 BufferIO::WriteInt16(pbuf_p, phase);
-		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, phasebuf, 3);
-
+		 
 		 char query_buffer[1024];
 		 int length = query_field_info(pduel, (unsigned char*)query_buffer);
 		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
 		 RefreshMzone(i, 0xefffff, 0);
-		 RefreshMzone(i, 0xefffff, 0);
+		 RefreshMzone(1 - i, 0xefffff, 0);
 		 RefreshSzone(1 - i, 0xefffff, 0);
 		 RefreshSzone(i, 0xefffff, 0);
 		 RefreshHand(1 - i, 0xefffff, 0);
@@ -666,33 +635,16 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		 RefreshExtra(i, 0xefffff, 0);
 		 RefreshRemoved(1 - i, 0xefffff, 0);
 		 RefreshRemoved(i, 0xefffff, 0);
-		 /*
-		 if(dp == players[last_response])
-			 WaitforResponse(last_response);
-		 */
-		 STOC_TimeLimit sctl;
-		 sctl.player = 1 - last_response;
-		 sctl.left_time = time_limit[1 - last_response];
-		 NetServer::SendPacketToPlayer(players[i], STOC_TIME_LIMIT, sctl);
-		 sctl.player = last_response;
-		 sctl.left_time = time_limit[last_response] - time_elapsed;
-		 NetServer::SendPacketToPlayer(players[i], STOC_TIME_LIMIT, sctl);
-
 		 NetServer::SendPacketToPlayer(players[i], STOC_FIELD_FINISH);
 	 }
 #endif // ONLINE_PUZZLE
-#ifdef YGOPRO_SERVER_MODE
-	// if(cache_recorder)
-	// 	NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
-	// if(replay_recorder)
-	// 	NetServer::SendBufferToPlayer(replay_recorder, STOC_GAME_MSG, startbuf, 19);
-	turn_player = 0;
-	phase = 1;
-#endif
-	RefreshExtra(0);
-	RefreshExtra(1);
-	RefreshGrave(0);
-	RefreshGrave(1);
+
+//#endif // YGOPRO_SERVER_MODE
+
+	//RefreshExtra(0);
+	//RefreshExtra(1);
+	//RefreshGrave(0);
+	//RefreshGrave(1);
 	// RefreshRemoved(0);
 	// RefreshRemoved(1);
 	start_duel(pduel, opt);
