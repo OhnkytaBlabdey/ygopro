@@ -549,13 +549,15 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	set_message_handler((message_handler)SingleDuel::MessageHandler);
 	rnd.reset(seed);
 	pduel = create_duel(rnd.rand());
+	set_player_info(pduel, 0, host_info.start_lp, host_info.start_hand, host_info.draw_count);
+	set_player_info(pduel, 1, host_info.start_lp, host_info.start_hand, host_info.draw_count);
+
 #ifdef YGOPRO_SERVER_MODE
 	preload_script(pduel, "./script/special.lua", 0);
 #endif
-#ifndef ONLINE_PUZZLE
-	set_player_info(pduel, 0, host_info.start_lp, host_info.start_hand, host_info.draw_count);
-	set_player_info(pduel, 1, host_info.start_lp, host_info.start_hand, host_info.draw_count);
-#endif
+
+	
+
 	int opt = (int)host_info.duel_rule << 16;
 	if(host_info.no_shuffle_deck)
 		opt |= DUEL_PSEUDO_SHUFFLE;
@@ -595,34 +597,30 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 #endif //YGOPRO_SERVER_MODE
 
 #ifdef YGOPRO_SERVER_MODE
-// if(cache_recorder)
-// 	NetServer::SendBufferToPlayer(cache_recorder, STOC_GAME_MSG, startbuf, 19);
-// if(replay_recorder)
-// 	NetServer::SendBufferToPlayer(replay_recorder, STOC_GAME_MSG, startbuf, 19);
 	turn_player = 0;
 	phase = 1;
 #endif
 #ifdef ONLINE_PUZZLE
-	 for (int i = 0; i < 2; ++i) {
-		 //NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
+	for (int i = 0; i < 2; ++i) {
+		//NetServer::SendPacketToPlayer(players[i], STOC_DUEL_START);
 
-		 char startbuf[32], * pbuf = startbuf;
-		 BufferIO::WriteInt8(pbuf, MSG_START);
-		 BufferIO::WriteInt8(pbuf, i);
-		 BufferIO::WriteInt8(pbuf, host_info.duel_rule);
-		 BufferIO::WriteInt32(pbuf, host_info.start_lp);
-		 BufferIO::WriteInt32(pbuf, host_info.start_lp);
-		 BufferIO::WriteInt16(pbuf, 0);
-		 BufferIO::WriteInt16(pbuf, 0);
-		 BufferIO::WriteInt16(pbuf, 0);
-		 BufferIO::WriteInt16(pbuf, 0);
-		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, startbuf, 19);
-		 
-		 char query_buffer[1024];
-		 int length = query_field_info(pduel, (unsigned char*)query_buffer);
-		 NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
-		 
-	 }
+		char startbuf[32], * pbuf = startbuf;
+		BufferIO::WriteInt8(pbuf, MSG_START);
+		BufferIO::WriteInt8(pbuf, i);
+		BufferIO::WriteInt8(pbuf, host_info.duel_rule);
+		BufferIO::WriteInt32(pbuf, host_info.start_lp);
+		BufferIO::WriteInt32(pbuf, host_info.start_lp);
+		BufferIO::WriteInt16(pbuf, 0);
+		BufferIO::WriteInt16(pbuf, 0);
+		BufferIO::WriteInt16(pbuf, 0);
+		BufferIO::WriteInt16(pbuf, 0);
+		NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, startbuf, 19);
+
+		char query_buffer[1024];
+		int length = query_field_info(pduel, (unsigned char*)query_buffer);
+		NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
+
+	}
 	int newturn_count = 1;
 	char turnbuf[2], * pbuf_t = turnbuf;
 	BufferIO::WriteInt8(pbuf_t, MSG_NEW_TURN);
@@ -630,11 +628,12 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, turnbuf, 2);
 	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, turnbuf, 2);
 
-	 char phasebuf[4], * pbuf_p = phasebuf;
-	 BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
-	 BufferIO::WriteInt16(pbuf_p, phase);
-	 NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, phasebuf, 3);
-	 NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, phasebuf, 3);
+	char phasebuf[4], * pbuf_p = phasebuf;
+	BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
+	BufferIO::WriteInt16(pbuf_p, phase);
+	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, phasebuf, 3);
+	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, phasebuf, 3);
+
 	RefreshMzone(0, 0xefffff, 0);
 	RefreshMzone(1, 0xefffff, 0);
 	RefreshSzone(1, 0xefffff, 0);
