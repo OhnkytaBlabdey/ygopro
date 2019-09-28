@@ -591,13 +591,11 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	last_replay.Flush();
 #else
 	if (!preload_script(pduel, "./single/xx.lua", 0)) {
-		printf_s("load error.\n");
+		fprintf_s(stderr,"load error.\n");
 	}
 	char engineBuffer[0x1000];
-	bool is_continuing = true;
 	int len = get_message(pduel, (byte*)engineBuffer);
-	if (len > 0)
-		is_continuing = Analyze(engineBuffer, len);
+	// if (len > 0) Analyze(engineBuffer, len);
 #endif
 #endif //YGOPRO_SERVER_MODE
 
@@ -621,7 +619,7 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 		BufferIO::WriteInt16(pbuf, 0);
 		NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, startbuf, 19);
 
-		char query_buffer[1024];
+		char query_buffer[2048];
 		int length = query_field_info(pduel, (unsigned char*)query_buffer);
 		NetServer::SendBufferToPlayer(players[i], STOC_GAME_MSG, query_buffer, length);
 
@@ -638,10 +636,10 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	BufferIO::WriteInt8(pbuf_p, MSG_NEW_PHASE);
 	BufferIO::WriteInt16(pbuf_p, phase);
 	NetServer::SendBufferToPlayer(players[0], STOC_GAME_MSG, phasebuf, 3);
-	NetServer::ReSendToPlayer(players[1]);
+	NetServer::SendBufferToPlayer(players[1], STOC_GAME_MSG, phasebuf, 3);
 
-	RefreshMzone(0, 0xefffff, 0);
 	RefreshMzone(1, 0xefffff, 0);
+	RefreshMzone(0, 0xefffff, 0);
 	RefreshSzone(1, 0xefffff, 0);
 	RefreshSzone(0, 0xefffff, 0);
 	RefreshHand(1, 0xefffff, 0);
