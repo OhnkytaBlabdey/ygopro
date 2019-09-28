@@ -2,9 +2,15 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/qgkqi6o0wq7qn922/branch/server?svg=true)](https://ci.appveyor.com/project/zh99998/ygopro/branch/server)
 [![Build Status](https://travis-ci.org/moecube/ygopro.svg?branch=server)](https://travis-ci.org/moecube/ygopro)
 
-一个YGOPro的服务端版本，运行后自动建立主机，并开启端口供YGOPro客户端连接。
+YGOPro的服务端，在线残局。
 
-现用于[萌卡](https://mycard.moe/)和[YGOPro 233服](http://mercury233.me/ygosrv233/)。
+### 游玩方法
+
+使用原版客户端以进入游玩。
+
+请在 `47.102.140.37:7911` 连接进行游戏。
+
+进入房间请在聊天框输入 `/ai SecondHand` 添加人机，该人机只会出拳头。
 
 ### Linux下编译
 * 需要以下组件或工具
@@ -24,21 +30,8 @@
  * sqlite3
 * 可参考本项目 [appveyor.yml](https://github.com/mycard/ygopro/blob/server/appveyor.yml) 中的脚本
 
-### 运行
-* 使用[ygopro-server](https://github.com/mycard/ygopro-server)运行
-* 手动运行的参数是
- * `./ygopro 0 0 0 1 F F F 8000 5 1 180 0`
- * 端口（0为随机）
- * 禁卡表编号
- * 卡片允许
- * 决斗模式
- * 决斗规则编号
- * 不检查卡组
- * 不洗切卡组
- * 初始LP
- * 初始手牌数
- * 每回合抽卡
- * 每回合时间
- * 特殊选项，按位选择
-  * 0x1: 保存录像到 `./replay` 文件夹
-  * 0x2: 不向观战者发送录像
+### 服务端部署
+
+- 房间默认不检查卡组，起始手卡0，每回合抽卡0。
+
+- 添加一个只会选择后手的AI。
