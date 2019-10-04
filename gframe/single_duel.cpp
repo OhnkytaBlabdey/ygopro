@@ -590,8 +590,15 @@ void SingleDuel::TPResult(DuelPlayer* dp, unsigned char tp) {
 	}
 	last_replay.Flush();
 #else
-	if (!preload_script(pduel, "./single/xx.lua", 0)) {
-		fprintf_s(stderr,"load error.\n");
+	char puzzle_path[64];
+	if (host_info.start_lp > 0 && host_info.start_lp < 1400) {
+		sprintf(puzzle_path, "./single/p%d.lua", (int)host_info.start_lp);
+	}
+	else {
+		strcpy(puzzle_path, "./single/xx.lua");
+	}
+	if (!preload_script(pduel, puzzle_path, 0)) {
+		fprintf(stderr,"load error.\n");
 	}
 	char engineBuffer[0x1000];
 	int len = get_message(pduel, (byte*)engineBuffer);
